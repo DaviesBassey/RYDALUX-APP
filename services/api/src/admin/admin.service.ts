@@ -68,14 +68,15 @@ export class AdminService {
     if (payout.status === 'FAILED') throw new BadRequestException('Payout has failed and cannot be approved.');
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.payout.update({
-        where: { id: payoutId },
+      const paid = await tx.payout.updateMany({
+        where: { id: payoutId, status: { in: ['PENDING', 'PROCESSING'] } },
         data: {
           status: 'PAID',
           processedAt: new Date(),
           notes: comment
         }
       });
+      if (paid.count !== 1) return;
 
       const amountMinor = decimalToMinorUnits(payout.amount);
 

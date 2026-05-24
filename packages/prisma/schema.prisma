@@ -93,6 +93,12 @@ enum LedgerEventType {
   ADJUSTMENT
 }
 
+enum IdempotencyStatus {
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
 enum SupportStatus {
   OPEN
   PENDING
@@ -807,6 +813,46 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   @@index([actorId, createdAt])
+}
+
+model IdempotencyKey {
+  id             String            @id @default(uuid()) @db.Uuid
+  key            String
+  scope          String
+  method         String
+  endpoint       String
+  actorId        String?           @db.Uuid
+  requestHash    String
+  status         IdempotencyStatus @default(IN_PROGRESS)
+  responseStatus Int?
+  responseBody   Json?
+  errorBody      Json?
+  lockedUntil    DateTime?
+  expiresAt      DateTime
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@unique([scope, key])
+  @@index([actorId, scope])
+  @@index([expiresAt])
+  @@index([status, lockedUntil])
+}
+
+model ProviderEvent {
+  id              String    @id @default(uuid()) @db.Uuid
+  provider        String
+  eventType       String
+  providerEventId String
+  reference       String?
+  payloadHash     String
+  payload         Json?
+  processedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([provider, providerEventId])
+  @@index([provider, reference])
+  @@index([processedAt])
 }
 
 model CityZone {

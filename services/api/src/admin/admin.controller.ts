@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { AdminService } from './admin.service';
 import { PaymentsService } from '../payments/payments.service';
@@ -14,13 +14,15 @@ import { ResolveSosEventDto } from './dto/resolve-sos-event.dto';
 import { UpdateIncidentStatusDto } from './dto/update-incident-status.dto';
 import { ReviewDriverDocumentDto } from '../drivers/dto/review-driver-document.dto';
 import { ReviewVehicleDto } from './dto/review-vehicle.dto';
+import { IdempotencyService } from '../idempotency/idempotency.service';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, AdminOnlyGuard, PermissionsGuard)
 export class AdminController {
   constructor(
     private readonly adminService: AdminService,
-    private readonly paymentsService: PaymentsService
+    private readonly paymentsService: PaymentsService,
+    private readonly idempotencyService: IdempotencyService
   ) {}
 
   @Post('kyc/approve')
@@ -32,9 +34,17 @@ export class AdminController {
 
   @Post('payouts/approve')
   @Permissions('FINANCE_MANAGER')
-  approvePayout(@Req() req: Request, @Body() body: ApprovePayoutDto) {
+  approvePayout(@Req() req: Request, @Body() body: ApprovePayoutDto, @Headers('idempotency-key') idempotencyKey?: string) {
     const user = req.user as any;
-    return this.adminService.approvePayout(user.userId, body.payoutId, body.comment);
+    return this.idempotencyService.run({
+      key: idempotencyKey,
+      scope: 'admin:payouts:approve',
+      method: req.method,
+      endpoint: req.route?.path ?? '/admin/payouts/approve',
+      actorId: user.userId,
+      body,
+      ttlMs: 7 * 24 * 60 * 60 * 1000,
+    }, () => this.adminService.approvePayout(user.userId, body.payoutId, body.comment));
   }
 
   @Post('operations/dispatch')

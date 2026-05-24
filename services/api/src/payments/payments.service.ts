@@ -73,14 +73,16 @@ export class PaymentsService {
       include: {
         riderProfile: { select: { userId: true } },
         fareQuote: { select: { totalFare: true } },
-        payment: { select: { id: true } },
+        payment: true,
       },
     }) as any;
 
     if (!trip) throw new NotFoundException('Trip not found.');
     if (!trip.riderProfile || trip.riderProfile.userId !== userId) throw new ForbiddenException('Access denied.');
     if (!trip.fareQuote) throw new BadRequestException('No fare quote for this trip.');
-    if (trip.payment) throw new BadRequestException('Payment already exists for this trip.');
+    if (trip.payment) {
+      return this.formatPaymentResponse(trip.payment);
+    }
 
     const reference = `RYD-PAY-${Date.now().toString(36).toUpperCase()}`;
 
@@ -124,16 +126,7 @@ export class PaymentsService {
       return created;
     });
 
-    return {
-      id: payment.id,
-      tripId: payment.tripId,
-      amount: payment.amount,
-      currency: payment.currency,
-      status: payment.status,
-      reference: payment.reference,
-      provider: payment.provider,
-      createdAt: payment.createdAt,
-    };
+    return this.formatPaymentResponse(payment);
   }
 
   async getPaymentForTrip(tripId: string, userId: string) {
@@ -175,10 +168,11 @@ export class PaymentsService {
       if (!payment) return;
       if (payment.status !== 'PENDING') return;
 
-      const updated = await tx.payment.update({
-        where: { id: payment.id },
+      const authorized = await tx.payment.updateMany({
+        where: { id: payment.id, status: 'PENDING' },
         data: { status: 'AUTHORIZED', updatedAt: new Date() },
       });
+      if (authorized.count !== 1) return;
 
       await this.recordAccountEvent(tx, {
         eventType: 'RIDER_PAYMENT_AUTHORIZED',
@@ -200,7 +194,7 @@ export class PaymentsService {
           action: 'RIDER_PAYMENT_AUTHORIZED',
           entity: 'PAYMENT',
           entityId: payment.id,
-          payload: { tripId, status: updated.status } as any,
+          payload: { tripId, status: 'AUTHORIZED' } as any,
         },
       });
     });
@@ -215,10 +209,11 @@ export class PaymentsService {
       if (payment.status === 'CAPTURED') return;
       if (payment.status !== 'PENDING' && payment.status !== 'AUTHORIZED') return;
 
-      await tx.payment.update({
-        where: { id: payment.id },
+      const captured = await tx.payment.updateMany({
+        where: { id: payment.id, status: { in: ['PENDING', 'AUTHORIZED'] } },
         data: { status: 'CAPTURED', updatedAt: new Date() },
       });
+      if (captured.count !== 1) return;
 
       const grossMinor = decimalToMinorUnits(payment.amount);
       const driverMinor = calculateShare(grossMinor, DRIVER_EARNINGS_BPS);
@@ -641,5 +636,18 @@ export class PaymentsService {
     });
 
     return financialTransaction;
+  }
+
+  private formatPaymentResponse(payment: any) {
+    return {
+      id: payment.id,
+      tripId: payment.tripId,
+      amount: payment.amount,
+      currency: payment.currency,
+      status: payment.status,
+      reference: payment.reference,
+      provider: payment.provider,
+      createdAt: payment.createdAt,
+    };
   }
 }

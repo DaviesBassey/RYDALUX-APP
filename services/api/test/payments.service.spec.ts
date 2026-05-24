@@ -14,6 +14,7 @@ describe('PaymentsService ownership & isolation', () => {
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       count: jest.fn(),
       findMany: jest.fn(),
       aggregate: jest.fn(),
@@ -25,6 +26,7 @@ describe('PaymentsService ownership & isolation', () => {
       create: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       aggregate: jest.fn(),
     },
     driverProfile: {
@@ -58,6 +60,8 @@ describe('PaymentsService ownership & isolation', () => {
     mockPrisma.$transaction.mockImplementation((callback: any) => callback(mockPrisma));
     mockPrisma.financialTransaction.findUnique.mockResolvedValue(null);
     mockPrisma.financialTransaction.create.mockImplementation(({ data }: any) => Promise.resolve({ id: `ft-${data.reference}`, ...data }));
+    mockPrisma.payment.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.payout.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.ledgerAccount.upsert.mockResolvedValue({ id: 'acct-1', balance: { toString: () => '0.00' } });
     mockPrisma.ledgerAccount.update.mockResolvedValue({ id: 'acct-1', balance: { toString: () => '500.00' } });
     mockPrisma.ledgerEntry.create.mockResolvedValue({});
@@ -106,6 +110,30 @@ describe('PaymentsService ownership & isolation', () => {
         })
       );
     });
+
+    it('returns the existing payment for duplicate initiation on the same trip', async () => {
+      mockPrisma.trip.findUnique.mockResolvedValue({
+        id: 'trip-1',
+        riderProfile: { userId: 'rider-1' },
+        fareQuote: { totalFare: 500 },
+        payment: {
+          id: 'pay-existing',
+          tripId: 'trip-1',
+          amount: 500,
+          currency: 'NGN',
+          status: 'PENDING',
+          reference: 'RYD-PAY-EXISTING',
+          provider: 'mock-paystack',
+          createdAt: new Date(),
+        },
+      });
+
+      const result = await paymentsService.initiateMockPayment('rider-1', 'trip-1');
+
+      expect(result.id).toBe('pay-existing');
+      expect(mockPrisma.payment.create).not.toHaveBeenCalled();
+      expect(mockPrisma.financialTransaction.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('capturePaymentForTrip', () => {
@@ -129,9 +157,9 @@ describe('PaymentsService ownership & isolation', () => {
       await paymentsService.capturePaymentForTrip('trip-1', 'driver-prof-1');
 
       expect(mockPrisma.$transaction).toHaveBeenCalled();
-      expect(mockPrisma.payment.update).toHaveBeenCalledWith(
+      expect(mockPrisma.payment.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'pay-1' },
+          where: { id: 'pay-1', status: { in: ['PENDING', 'AUTHORIZED'] } },
           data: expect.objectContaining({ status: 'CAPTURED' }),
         })
       );
@@ -156,6 +184,24 @@ describe('PaymentsService ownership & isolation', () => {
         })
       );
       expect(mockPrisma.auditLog.create).toHaveBeenCalled();
+    });
+
+    it('does not execute capture ledger writes when conditional status update loses the race', async () => {
+      mockPrisma.payment.findUnique.mockResolvedValue({
+        id: 'pay-1',
+        tripId: 'trip-1',
+        amount: { toString: () => '500.00' },
+        currency: 'NGN',
+        status: 'AUTHORIZED',
+        provider: 'mock-paystack',
+      });
+      mockPrisma.payment.updateMany.mockResolvedValue({ count: 0 });
+
+      await paymentsService.capturePaymentForTrip('trip-1', 'driver-prof-1');
+
+      expect(mockPrisma.payout.create).not.toHaveBeenCalled();
+      expect(mockPrisma.financialTransaction.create).not.toHaveBeenCalled();
+      expect(mockPrisma.auditLog.create).not.toHaveBeenCalled();
     });
   });
 
@@ -226,6 +272,7 @@ describe('AdminService.approvePayout state validation', () => {
     payout: {
       findUnique: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     auditLog: {
       create: jest.fn(),
@@ -255,6 +302,7 @@ describe('AdminService.approvePayout state validation', () => {
     mockPrisma.$transaction.mockImplementation((callback: any) => callback(mockPrisma));
     mockPrisma.financialTransaction.findUnique.mockResolvedValue(null);
     mockPrisma.financialTransaction.create.mockImplementation(({ data }: any) => Promise.resolve({ id: `ft-${data.reference}`, ...data }));
+    mockPrisma.payout.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.ledgerAccount.upsert.mockResolvedValue({ id: 'acct-1', balance: { toString: () => '0.00' } });
     mockPrisma.ledgerAccount.update.mockResolvedValue({ id: 'acct-1', balance: { toString: () => '400.00' } });
     mockPrisma.ledgerEntry.create.mockResolvedValue({});
@@ -268,21 +316,21 @@ describe('AdminService.approvePayout state validation', () => {
     mockPrisma.payout.findUnique.mockResolvedValue(null);
 
     await expect(adminService.approvePayout('admin-1', 'nonexistent-id')).rejects.toThrow(NotFoundException);
-    expect(mockPrisma.payout.update).not.toHaveBeenCalled();
+    expect(mockPrisma.payout.updateMany).not.toHaveBeenCalled();
   });
 
   it('throws BadRequestException when payout is already PAID', async () => {
     mockPrisma.payout.findUnique.mockResolvedValue({ id: 'payout-1', status: 'PAID' });
 
     await expect(adminService.approvePayout('admin-1', 'payout-1')).rejects.toThrow(BadRequestException);
-    expect(mockPrisma.payout.update).not.toHaveBeenCalled();
+    expect(mockPrisma.payout.updateMany).not.toHaveBeenCalled();
   });
 
   it('throws BadRequestException when payout status is FAILED', async () => {
     mockPrisma.payout.findUnique.mockResolvedValue({ id: 'payout-1', status: 'FAILED' });
 
     await expect(adminService.approvePayout('admin-1', 'payout-1')).rejects.toThrow(BadRequestException);
-    expect(mockPrisma.payout.update).not.toHaveBeenCalled();
+    expect(mockPrisma.payout.updateMany).not.toHaveBeenCalled();
   });
 
   it('approves a PENDING payout and logs the action', async () => {
@@ -298,9 +346,9 @@ describe('AdminService.approvePayout state validation', () => {
 
     const result = await adminService.approvePayout('admin-1', 'payout-1', 'Looks good');
     expect(result.success).toBe(true);
-    expect(mockPrisma.payout.update).toHaveBeenCalledWith(
+    expect(mockPrisma.payout.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'payout-1' },
+        where: { id: 'payout-1', status: { in: ['PENDING', 'PROCESSING'] } },
         data: expect.objectContaining({ status: 'PAID' }),
       })
     );
@@ -326,6 +374,6 @@ describe('AdminService.approvePayout state validation', () => {
 
     const result = await adminService.approvePayout('admin-1', 'payout-1');
     expect(result.success).toBe(true);
-    expect(mockPrisma.payout.update).toHaveBeenCalled();
+    expect(mockPrisma.payout.updateMany).toHaveBeenCalled();
   });
 });

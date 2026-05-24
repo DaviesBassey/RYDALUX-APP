@@ -1,18 +1,33 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RiderOnlyGuard } from '../auth/rider-only.guard';
 import { DriverOnlyGuard } from '../auth/driver-only.guard';
 import { PaymentsService } from './payments.service';
 import { InitiateMockPaymentDto } from './dto/initiate-mock-payment.dto';
+import { IdempotencyService } from '../idempotency/idempotency.service';
 
 @Controller('payments')
 export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+  constructor(
+    private readonly paymentsService: PaymentsService,
+    private readonly idempotencyService: IdempotencyService
+  ) {}
 
   @Post('mock/initiate')
   @UseGuards(JwtAuthGuard, RiderOnlyGuard)
-  initiateMockPayment(@Req() req: any, @Body() body: InitiateMockPaymentDto) {
-    return this.paymentsService.initiateMockPayment(req.user.userId, body.tripId);
+  initiateMockPayment(
+    @Req() req: any,
+    @Body() body: InitiateMockPaymentDto,
+    @Headers('idempotency-key') idempotencyKey?: string
+  ) {
+    return this.idempotencyService.run({
+      key: idempotencyKey,
+      scope: 'payments:mock:initiate',
+      method: req.method,
+      endpoint: req.route?.path ?? '/payments/mock/initiate',
+      actorId: req.user.userId,
+      body,
+    }, () => this.paymentsService.initiateMockPayment(req.user.userId, body.tripId));
   }
 
   @Get('trip/:tripId')
