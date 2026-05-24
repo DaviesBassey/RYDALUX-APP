@@ -218,4 +218,12 @@ export const api = {
   updateIncidentStatus: (id: string, status: string) => fetchJson<{ success: boolean }>(`/admin/incidents/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   reportIncident: (tripId: string, description: string, severity?: string) =>
     fetchJson<{ success: boolean; incidentId?: string }>('/admin/incidents/report', { method: 'POST', body: JSON.stringify({ tripId, description, severity }) }),
+
+  // Finance
+  getFinanceSummary: () => fetchJson<any>('/admin/finance/summary'),
+  getFinancePayments: (limit = 20, offset = 0) => fetchJson<any>(`/admin/finance/payments?limit=${limit}&offset=${offset}`),
+  getFinancePayouts: (limit = 20, offset = 0) => fetchJson<any>(`/admin/finance/payouts?limit=${limit}&offset=${offset}`),
+  getFinanceLedger: (limit = 20, offset = 0) => fetchJson<any>(`/admin/finance/ledger?limit=${limit}&offset=${offset}`),
+  getFinanceWallets: (limit = 20, offset = 0) => fetchJson<any>(`/admin/finance/wallets?limit=${limit}&offset=${offset}`),
+  getFinanceReconciliation: () => fetchJson<any>('/admin/finance/reconciliation'),
 };

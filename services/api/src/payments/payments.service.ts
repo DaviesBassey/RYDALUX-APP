@@ -472,6 +472,173 @@ export class PaymentsService {
     };
   }
 
+  async getFinanceSummary() {
+    const [revenue, commissionAgg, driverEarningsAgg, failedPayments, refundAgg, idempotencyByStatus] = await Promise.all([
+      this.getRevenueStats(),
+      this.prisma.financialTransaction.aggregate({
+        where: { eventType: 'PLATFORM_COMMISSION_RECORDED' },
+        _sum: { amount: true },
+        _count: { id: true },
+      }),
+      this.prisma.financialTransaction.aggregate({
+        where: { eventType: 'DRIVER_EARNING_RECORDED', reference: { endsWith: ':driver-earning' } },
+        _sum: { amount: true },
+        _count: { id: true },
+      }),
+      this.prisma.payment.aggregate({
+        where: { status: 'FAILED' },
+        _sum: { amount: true },
+        _count: { id: true },
+      }),
+      this.prisma.financialTransaction.aggregate({
+        where: { eventType: 'REFUND_PENDING' },
+        _sum: { amount: true },
+        _count: { id: true },
+      }),
+      this.prisma.idempotencyKey.groupBy({
+        by: ['status'],
+        _count: { id: true },
+      }),
+    ]);
+
+    return {
+      grossCapturedRevenue: revenue.totalCaptured,
+      capturedCount: revenue.capturedCount,
+      platformCommission: {
+        total: this.decimalLikeToNumber(commissionAgg._sum.amount),
+        count: commissionAgg._count.id,
+      },
+      driverEarnings: {
+        total: this.decimalLikeToNumber(driverEarningsAgg._sum.amount),
+        count: driverEarningsAgg._count.id,
+      },
+      pendingPayouts: revenue.pendingPayouts,
+      paidPayouts: revenue.paidPayouts,
+      failedPayments: {
+        total: this.decimalLikeToNumber(failedPayments._sum.amount),
+        count: failedPayments._count.id,
+      },
+      refunds: {
+        total: this.decimalLikeToNumber(refundAgg._sum.amount),
+        count: refundAgg._count.id,
+      },
+      paymentStatusSummary: revenue.byStatus,
+      idempotency: idempotencyByStatus.map((row) => ({ status: row.status, count: row._count.id })),
+    };
+  }
+
+  async listFinancePayments(limit = 20, offset = 0) {
+    return this.listPayments(limit, offset);
+  }
+
+  async listFinancePayouts(limit = 20, offset = 0) {
+    const [items, total] = await Promise.all([
+      this.prisma.payout.findMany({
+        include: {
+          driverProfile: {
+            include: {
+              user: { select: { id: true, displayName: true, phone: true, email: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: offset,
+        take: limit,
+      }),
+      this.prisma.payout.count(),
+    ]);
+
+    return {
+      items: items.map((p) => ({
+        id: p.id,
+        amount: p.amount,
+        currency: p.currency,
+        status: p.status,
+        provider: p.provider,
+        providerReference: p.providerReference,
+        createdAt: p.createdAt,
+        processedAt: p.processedAt,
+        driver: {
+          id: p.driverProfile.user.id,
+          name: p.driverProfile.user.displayName,
+          phone: p.driverProfile.user.phone,
+          email: p.driverProfile.user.email,
+        },
+      })),
+      total,
+      limit,
+      offset,
+    };
+  }
+
+  async listFinanceLedger(limit = 20, offset = 0) {
+    const [items, total] = await Promise.all([
+      this.prisma.ledgerEntry.findMany({
+        include: {
+          ledgerAccount: true,
+          wallet: { include: { user: { select: { id: true, displayName: true, phone: true, email: true } } } },
+          financialTransaction: {
+            select: {
+              id: true,
+              eventType: true,
+              reference: true,
+              referenceType: true,
+              referenceId: true,
+              paymentId: true,
+              payoutId: true,
+              tripId: true,
+              createdAt: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: offset,
+        take: limit,
+      }),
+      this.prisma.ledgerEntry.count(),
+    ]);
+
+    return { items, total, limit, offset };
+  }
+
+  async listFinanceWallets(limit = 20, offset = 0) {
+    const [items, total] = await Promise.all([
+      this.prisma.wallet.findMany({
+        include: {
+          user: { select: { id: true, displayName: true, phone: true, email: true, userType: true } },
+        },
+        orderBy: { updatedAt: 'desc' },
+        skip: offset,
+        take: limit,
+      }),
+      this.prisma.wallet.count(),
+    ]);
+
+    return { items, total, limit, offset };
+  }
+
+  async getFinanceReconciliation() {
+    const [ledgerTransactions, ledgerEntries, providerEvents, unprocessedProviderEvents, failedPayments, pendingPayouts] = await Promise.all([
+      this.prisma.financialTransaction.count(),
+      this.prisma.ledgerEntry.count(),
+      this.prisma.providerEvent.count(),
+      this.prisma.providerEvent.count({ where: { processedAt: null } }),
+      this.prisma.payment.count({ where: { status: 'FAILED' } }),
+      this.prisma.payout.count({ where: { status: { in: ['PENDING', 'PROCESSING'] } } }),
+    ]);
+
+    return {
+      status: failedPayments === 0 && unprocessedProviderEvents === 0 ? 'CLEAR' : 'REVIEW_REQUIRED',
+      ledgerTransactions,
+      ledgerEntries,
+      providerEvents,
+      unprocessedProviderEvents,
+      failedPayments,
+      pendingPayouts,
+      paystackMode: 'NOT_CONFIGURED',
+    };
+  }
+
   private async ensureLedgerAccount(
     tx: FinancialTx,
     account: { code: string; name: string; accountType: string },
@@ -649,5 +816,9 @@ export class PaymentsService {
       provider: payment.provider,
       createdAt: payment.createdAt,
     };
+  }
+
+  private decimalLikeToNumber(value: { toString(): string } | null | undefined): number {
+    return minorUnitsToNumber(decimalToMinorUnits(value ?? { toString: () => '0' }));
   }
 }

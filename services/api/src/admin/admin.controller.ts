@@ -142,4 +142,40 @@ export class AdminController {
   getRevenueStats() {
     return this.paymentsService.getRevenueStats();
   }
+
+  @Get('finance/summary')
+  @Permissions('FINANCE_MANAGER')
+  getFinanceSummary() {
+    return this.paymentsService.getFinanceSummary();
+  }
+
+  @Get('finance/payments')
+  @Permissions('FINANCE_MANAGER')
+  listFinancePayments(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.paymentsService.listFinancePayments(Number(limit) || 20, Number(offset) || 0);
+  }
+
+  @Get('finance/payouts')
+  @Permissions('FINANCE_MANAGER')
+  listFinancePayouts(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.paymentsService.listFinancePayouts(Number(limit) || 20, Number(offset) || 0);
+  }
+
+  @Get('finance/ledger')
+  @Permissions('FINANCE_MANAGER')
+  listFinanceLedger(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.paymentsService.listFinanceLedger(Number(limit) || 20, Number(offset) || 0);
+  }
+
+  @Get('finance/wallets')
+  @Permissions('FINANCE_MANAGER')
+  listFinanceWallets(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.paymentsService.listFinanceWallets(Number(limit) || 20, Number(offset) || 0);
+  }
+
+  @Get('finance/reconciliation')
+  @Permissions('FINANCE_MANAGER')
+  getFinanceReconciliation() {
+    return this.paymentsService.getFinanceReconciliation();
+  }
 }
