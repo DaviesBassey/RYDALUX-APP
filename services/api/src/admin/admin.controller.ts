@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { AdminService } from './admin.service';
+import { PaymentsService } from '../payments/payments.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AdminOnlyGuard } from '../auth/admin-only.guard';
 import { Permissions } from '../auth/permissions.decorator';
@@ -15,7 +16,10 @@ import { ReviewVehicleDto } from './dto/review-vehicle.dto';
 @Controller('admin')
 @UseGuards(JwtAuthGuard, AdminOnlyGuard, PermissionsGuard)
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly paymentsService: PaymentsService
+  ) {}
 
   @Post('kyc/approve')
   @Permissions('KYC_REVIEWER')
@@ -81,5 +85,23 @@ export class AdminController {
   @Permissions('READ_ONLY_AUDITOR')
   getAuditLogs() {
     return this.adminService.getAuditLogs();
+  }
+
+  @Get('payments')
+  @Permissions('FINANCE_MANAGER')
+  listPayments(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.paymentsService.listPayments(Number(limit) || 20, Number(offset) || 0);
+  }
+
+  @Get('payouts/pending')
+  @Permissions('FINANCE_MANAGER')
+  listPendingPayouts(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.paymentsService.listPendingPayouts(Number(limit) || 20, Number(offset) || 0);
+  }
+
+  @Get('revenue')
+  @Permissions('FINANCE_MANAGER')
+  getRevenueStats() {
+    return this.paymentsService.getRevenueStats();
   }
 }

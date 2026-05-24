@@ -5,6 +5,7 @@ import { TripStatus } from '@prisma/client';
 import RedisClient from 'ioredis';
 import { TripsGateway } from './trips.gateway';
 import { FareService } from '../fare/fare.service';
+import { PaymentsService } from '../payments/payments.service';
 import { CreateTripDto } from './dto/create-trip.dto';
 
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
@@ -89,7 +90,8 @@ export class TripsService {
     private readonly prisma: PrismaService,
     @Inject('REDIS_CLIENT') private readonly redisClient: RedisClient,
     private readonly tripsGateway: TripsGateway,
-    private readonly fareService: FareService
+    private readonly fareService: FareService,
+    private readonly paymentsService: PaymentsService
   ) {}
 
   async transition(tripId: string, actorId: string | null, nextState: TripStatus, opts: { reason?: string; pin?: string } = {}) {
@@ -185,6 +187,12 @@ export class TripsService {
 
       return t;
     });
+
+    // Capture payment and create driver payout when trip completes
+    if (nextState === 'COMPLETED') {
+      const trip = await this.prisma.trip.findUnique({ where: { id: tripId }, select: { driverProfileId: true } });
+      await this.paymentsService.capturePaymentForTrip(tripId, trip?.driverProfileId ?? null);
+    }
 
     return updated;
   }
@@ -448,6 +456,9 @@ export class TripsService {
       return created;
     });
 
+    // Create mock payment record for the trip
+    await this.paymentsService.initiateMockPayment(userId, trip.id);
+
     return this.getTripForUser(trip.id, userId, 'RIDER');
   }
 
@@ -613,6 +624,9 @@ export class TripsService {
         }
       });
     });
+
+    // Mock auto-authorize payment when driver accepts
+    await this.paymentsService.authorizePaymentForTrip(tripId);
 
     return this.getTripForUser(tripId, userId, 'DRIVER');
   }
