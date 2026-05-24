@@ -2,6 +2,7 @@ import { Body, Controller, Get, Headers, Param, Patch, Post, Query, Req, UseGuar
 import { Request } from 'express';
 import { AdminService } from './admin.service';
 import { PaymentsService } from '../payments/payments.service';
+import { PaystackService } from '../payments/paystack.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AdminOnlyGuard } from '../auth/admin-only.guard';
 import { Permissions } from '../auth/permissions.decorator';
@@ -15,6 +16,7 @@ import { UpdateIncidentStatusDto } from './dto/update-incident-status.dto';
 import { ReviewDriverDocumentDto } from '../drivers/dto/review-driver-document.dto';
 import { ReviewVehicleDto } from './dto/review-vehicle.dto';
 import { IdempotencyService } from '../idempotency/idempotency.service';
+import { RequestRefundDto } from './dto/request-refund.dto';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, AdminOnlyGuard, PermissionsGuard)
@@ -22,7 +24,8 @@ export class AdminController {
   constructor(
     private readonly adminService: AdminService,
     private readonly paymentsService: PaymentsService,
-    private readonly idempotencyService: IdempotencyService
+    private readonly idempotencyService: IdempotencyService,
+    private readonly paystackService: PaystackService,
   ) {}
 
   @Post('kyc/approve')
@@ -177,5 +180,32 @@ export class AdminController {
   @Permissions('FINANCE_MANAGER')
   getFinanceReconciliation() {
     return this.paymentsService.getFinanceReconciliation();
+  }
+
+  @Post('finance/refunds')
+  @Permissions('FINANCE_MANAGER')
+  requestRefund(@Req() req: Request, @Body() body: RequestRefundDto, @Headers('idempotency-key') idempotencyKey?: string) {
+    const user = req.user as any;
+    return this.idempotencyService.run({
+      key: idempotencyKey,
+      scope: 'admin:finance:refunds:create',
+      method: req.method,
+      endpoint: req.route?.path ?? '/admin/finance/refunds',
+      actorId: user.userId,
+      body,
+      ttlMs: 7 * 24 * 60 * 60 * 1000,
+    }, () => this.paystackService.requestRefund(user.userId, body.paymentId, body.reason));
+  }
+
+  @Get('finance/refunds')
+  @Permissions('FINANCE_MANAGER')
+  listRefunds(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.paystackService.listRefunds(Number(limit) || 20, Number(offset) || 0);
+  }
+
+  @Get('finance/disputes')
+  @Permissions('FINANCE_MANAGER')
+  listDisputes(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.paystackService.listDisputes(Number(limit) || 20, Number(offset) || 0);
   }
 }

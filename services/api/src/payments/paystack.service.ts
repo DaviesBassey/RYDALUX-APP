@@ -4,8 +4,9 @@ import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { PaymentsService, decimalToMinorUnits, LEDGER_ACCOUNTS } from './payments.service';
+import { PaymentsService, decimalToMinorUnits, LEDGER_ACCOUNTS, minorUnitsToDecimal } from './payments.service';
 import { IdempotencyService } from '../idempotency/idempotency.service';
+import { SaveDriverBankAccountDto } from './dto/save-driver-bank-account.dto';
 
 interface PaystackInitializeResponse {
   status: boolean;
@@ -40,16 +41,54 @@ interface PaystackVerificationResponse {
   data?: PaystackVerificationData;
 }
 
+interface PaystackRecipientResponse {
+  status: boolean;
+  message: string;
+  data?: {
+    recipient_code: string;
+    id?: number;
+    details?: Record<string, unknown>;
+  };
+}
+
+interface PaystackTransferResponse {
+  status: boolean;
+  message: string;
+  data?: {
+    id?: number;
+    transfer_code: string;
+    reference: string;
+    status: string;
+  };
+}
+
+interface PaystackRefundResponse {
+  status: boolean;
+  message: string;
+  data?: {
+    id?: number;
+    reference?: string;
+    status?: string;
+  };
+}
+
 interface PaystackWebhookPayload {
   event: string;
   data: {
     id?: number;
-    reference: string;
+    reference?: string;
+    transfer_code?: string;
     status: string;
     amount: number;
     channel?: string;
     currency?: string;
     gateway_response?: string;
+    reason?: string;
+    transaction_reference?: string;
+    refund_reference?: string;
+    dispute?: number | string;
+    category?: string;
+    message?: string;
     metadata?: Record<string, unknown>;
     authorization?: {
       authorization_code: string;
@@ -161,7 +200,7 @@ export class PaystackService {
       throw new BadRequestException('Rider email is required to initialize Paystack payment.');
     }
 
-    const amountKobo = Math.round(Number(trip.fareQuote.totalFare) * 100);
+    const amountKobo = Number(decimalToMinorUnits(trip.fareQuote.totalFare));
     const callbackUrl = this.configService.get<string>('paystackCallbackUrl') || undefined;
 
     try {
@@ -230,46 +269,65 @@ export class PaystackService {
     const event = payload.event;
     const data = payload.data;
 
-    const providerEventId = data.id?.toString() ?? `${event}-${data.reference}-${Date.now()}`;
+    const reference = data.reference ?? data.transfer_code ?? data.refund_reference ?? data.transaction_reference ?? null;
+    const providerEventId = `${event}:${data.id?.toString() ?? reference ?? this.idempotencyService.hashProviderPayload(payload)}`;
 
-    await this.idempotencyService.recordProviderEvent({
+    const providerEvent = await this.idempotencyService.recordProviderEvent({
       provider: 'paystack',
       eventType: event,
       providerEventId,
-      reference: data.reference,
+      reference,
       payload,
     });
 
+    if (providerEvent.processedAt) {
+      return;
+    }
+
+    let processed = true;
     if (event === 'charge.success') {
-      await this.handleChargeSuccess(data);
+      processed = await this.handleChargeSuccess(data);
     } else if (event === 'charge.failed') {
-      await this.handleChargeFailed(data);
+      processed = await this.handleChargeFailed(data);
+    } else if (event === 'transfer.success') {
+      processed = await this.handleTransferSuccess(data);
+    } else if (event === 'transfer.failed') {
+      processed = await this.handleTransferFailed(data);
+    } else if (event === 'refund.pending' || event === 'refund.processed' || event === 'refund.failed') {
+      processed = await this.handleRefundEvent(event, data);
+    } else if (event.startsWith('charge.dispute.')) {
+      processed = await this.handleDisputeEvent(event, data);
     } else {
       this.logger.log(`Unhandled Paystack event: ${event}`);
     }
+
+    if (processed) {
+      await this.prisma.providerEvent.update({ where: { id: providerEvent.id }, data: { processedAt: new Date() } });
+    }
   }
 
-  private async handleChargeSuccess(data: PaystackWebhookPayload['data']) {
+  private async handleChargeSuccess(data: PaystackWebhookPayload['data']): Promise<boolean> {
+    if (!data.reference) return false;
     let verification: PaystackVerificationResponse;
     try {
       verification = await this.verifyTransaction(data.reference);
     } catch (err: any) {
       this.logger.error(`Failed to verify Paystack transaction ${data.reference}: ${err.message}`);
-      return;
+      return false;
     }
 
     if (!verification.status || verification.data?.status !== 'success') {
       this.logger.warn(`Paystack verification failed for ${data.reference}`);
-      return;
+      return false;
     }
 
     const payment = await this.prisma.payment.findUnique({ where: { reference: data.reference } });
     if (!payment) {
       this.logger.warn(`Payment not found for Paystack reference ${data.reference}`);
-      return;
+      return true;
     }
     if (payment.status === 'CAPTURED' || payment.status === 'FAILED' || payment.status === 'REFUNDED') {
-      return;
+      return true;
     }
 
     const paystackData = verification.data!;
@@ -302,16 +360,19 @@ export class PaystackService {
     if (trip?.status === 'COMPLETED') {
       await this.paymentsService.capturePaymentForTrip(trip.id, trip.driverProfileId);
     }
+
+    return true;
   }
 
-  private async handleChargeFailed(data: PaystackWebhookPayload['data']) {
+  private async handleChargeFailed(data: PaystackWebhookPayload['data']): Promise<boolean> {
+    if (!data.reference) return false;
     const payment = await this.prisma.payment.findUnique({ where: { reference: data.reference } });
     if (!payment) {
       this.logger.warn(`Payment not found for Paystack reference ${data.reference}`);
-      return;
+      return true;
     }
     if (payment.status === 'CAPTURED' || payment.status === 'FAILED' || payment.status === 'REFUNDED') {
-      return;
+      return true;
     }
 
     const existingMeta =
@@ -342,6 +403,469 @@ export class PaystackService {
         payload: { reference: data.reference, reason: data.gateway_response, provider: 'paystack' } as any,
       },
     });
+
+    return true;
+  }
+
+  async saveDriverBankAccount(userId: string, payload: SaveDriverBankAccountDto) {
+    const driverProfile = await this.prisma.driverProfile.findUnique({ where: { userId } });
+    if (!driverProfile) throw new NotFoundException('Driver profile not found.');
+
+    const accountNumberLast4 = payload.accountNumber.slice(-4);
+    const recipientCode = this.secretKey
+      ? await this.createTransferRecipient(payload)
+      : `mock-recipient-${driverProfile.id}`;
+
+    const bankAccount = await this.prisma.driverBankAccount.upsert({
+      where: { driverProfileId: driverProfile.id },
+      update: {
+        bankCode: payload.bankCode,
+        bankName: payload.bankName,
+        accountName: payload.accountName,
+        accountNumberLast4,
+        currency: 'NGN',
+        provider: this.secretKey ? 'paystack' : 'mock-paystack',
+        paystackRecipientCode: recipientCode,
+        recipientCreatedAt: new Date(),
+        deletedAt: null,
+        metadata: { recipientProvider: this.secretKey ? 'paystack' : 'mock-paystack' } as any,
+      },
+      create: {
+        driverProfileId: driverProfile.id,
+        bankCode: payload.bankCode,
+        bankName: payload.bankName,
+        accountName: payload.accountName,
+        accountNumberLast4,
+        currency: 'NGN',
+        provider: this.secretKey ? 'paystack' : 'mock-paystack',
+        paystackRecipientCode: recipientCode,
+        recipientCreatedAt: new Date(),
+        metadata: { recipientProvider: this.secretKey ? 'paystack' : 'mock-paystack' } as any,
+      },
+    });
+
+    return { bankAccount: this.formatBankAccount(bankAccount) };
+  }
+
+  async getDriverBankAccount(userId: string) {
+    const driverProfile = await this.prisma.driverProfile.findUnique({
+      where: { userId },
+      include: { bankAccount: true },
+    });
+    if (!driverProfile) throw new NotFoundException('Driver profile not found.');
+
+    return { bankAccount: driverProfile.bankAccount ? this.formatBankAccount(driverProfile.bankAccount) : null };
+  }
+
+  async initiatePayoutTransfer(payoutId: string, approverId: string, comment?: string) {
+    const payout = await this.prisma.payout.findUnique({
+      where: { id: payoutId },
+      include: {
+        driverProfile: {
+          include: { bankAccount: true },
+        },
+      },
+    });
+    if (!payout) throw new NotFoundException('Payout not found.');
+    if (payout.status === 'PAID') return { success: true, status: 'PAID' };
+    if (payout.status === 'FAILED') throw new BadRequestException('Payout has failed and cannot be approved.');
+
+    if (!this.secretKey || payout.provider !== 'paystack') {
+      return this.markMockPayoutPaid(payoutId, approverId, comment);
+    }
+
+    if (!payout.driverProfile.bankAccount?.paystackRecipientCode) {
+      throw new BadRequestException('Driver bank account is required before payout approval.');
+    }
+
+    if (payout.status === 'PROCESSING' && payout.providerTransferCode) {
+      return { success: true, status: 'PROCESSING', transferCode: payout.providerTransferCode };
+    }
+
+    const reference = `RYD-TRF-${payout.id}`;
+    const amountKobo = Number(decimalToMinorUnits(payout.amount));
+
+    const response = await firstValueFrom(
+      this.httpService.post<PaystackTransferResponse>(
+        `${this.baseUrl}/transfer`,
+        {
+          source: 'balance',
+          amount: amountKobo,
+          recipient: payout.driverProfile.bankAccount.paystackRecipientCode,
+          reason: comment ?? `RYDALUX driver payout ${payout.id}`,
+          reference,
+        },
+        { headers: { Authorization: `Bearer ${this.secretKey}` } },
+      ),
+    );
+
+    if (!response.data?.status || !response.data.data?.transfer_code) {
+      throw new BadRequestException('Paystack transfer initiation failed: ' + (response.data?.message ?? 'Unknown error'));
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.payout.updateMany({
+        where: { id: payout.id, status: 'PENDING' },
+        data: {
+          status: 'PROCESSING',
+          providerReference: reference,
+          providerTransferId: response.data.data?.id?.toString(),
+          providerTransferCode: response.data.data!.transfer_code,
+          transferInitiatedAt: new Date(),
+          notes: comment,
+        },
+      });
+      if (updated.count !== 1) return;
+
+      await tx.auditLog.create({
+        data: {
+          actorId: approverId,
+          action: 'PAYOUT_TRANSFER_INITIATED',
+          entity: 'PAYOUT',
+          entityId: payout.id,
+          payload: { provider: 'paystack', reference, transferCode: response.data.data!.transfer_code } as any,
+        },
+      });
+    });
+
+    return { success: true, status: 'PROCESSING', transferCode: response.data.data.transfer_code };
+  }
+
+  async requestRefund(adminId: string, paymentId: string, reason?: string) {
+    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!payment) throw new NotFoundException('Payment not found.');
+    if (payment.status !== 'CAPTURED') throw new BadRequestException('Only captured payments can be refunded.');
+
+    const existingRefund = await this.prisma.refund.findFirst({
+      where: { paymentId, status: { in: ['PENDING', 'PROCESSING', 'PROCESSED'] } },
+    });
+    if (existingRefund) return { refund: existingRefund };
+
+    const reference = `RYD-RFD-${payment.id}`;
+    const initialStatus = this.secretKey && payment.provider === 'paystack' ? 'PROCESSING' : 'PROCESSED';
+    const refund = await this.prisma.refund.create({
+      data: {
+        paymentId,
+        amount: payment.amount,
+        currency: payment.currency,
+        status: initialStatus,
+        provider: payment.provider,
+        providerReference: reference,
+        reason,
+        requestedById: adminId,
+        metadata: { fullRefund: true } as any,
+        processedAt: initialStatus === 'PROCESSED' ? new Date() : null,
+      },
+    });
+
+    if (!this.secretKey || payment.provider !== 'paystack') {
+      await this.prisma.payment.update({ where: { id: payment.id }, data: { status: 'REFUNDED' } });
+      return { refund };
+    }
+
+    const response = await firstValueFrom(
+      this.httpService.post<PaystackRefundResponse>(
+        `${this.baseUrl}/refund`,
+        {
+          transaction: payment.externalId ?? payment.reference,
+          amount: Number(decimalToMinorUnits(payment.amount)),
+          currency: payment.currency,
+          customer_note: reason,
+          merchant_note: reason ?? `RYDALUX refund ${payment.id}`,
+        },
+        { headers: { Authorization: `Bearer ${this.secretKey}` } },
+      ),
+    );
+
+    if (!response.data?.status) {
+      await this.prisma.refund.update({ where: { id: refund.id }, data: { status: 'FAILED', failedAt: new Date() } });
+      throw new BadRequestException('Paystack refund initiation failed: ' + (response.data?.message ?? 'Unknown error'));
+    }
+
+    const updatedRefund = await this.prisma.refund.update({
+      where: { id: refund.id },
+      data: {
+        providerRefundId: response.data.data?.id?.toString(),
+        providerReference: response.data.data?.reference ?? reference,
+        metadata: { fullRefund: true, paystackStatus: response.data.data?.status } as any,
+      },
+    });
+
+    return { refund: updatedRefund };
+  }
+
+  async listRefunds(limit = 20, offset = 0) {
+    const [items, total] = await Promise.all([
+      this.prisma.refund.findMany({
+        include: { payment: { select: { id: true, reference: true, status: true, provider: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip: offset,
+        take: limit,
+      }),
+      this.prisma.refund.count(),
+    ]);
+    return { items, total, limit, offset };
+  }
+
+  async listDisputes(limit = 20, offset = 0) {
+    const [items, total] = await Promise.all([
+      this.prisma.dispute.findMany({
+        include: { payment: { select: { id: true, reference: true, status: true, provider: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip: offset,
+        take: limit,
+      }),
+      this.prisma.dispute.count(),
+    ]);
+    return { items, total, limit, offset };
+  }
+
+  private async createTransferRecipient(payload: SaveDriverBankAccountDto) {
+    const response = await firstValueFrom(
+      this.httpService.post<PaystackRecipientResponse>(
+        `${this.baseUrl}/transferrecipient`,
+        {
+          type: 'nuban',
+          name: payload.accountName,
+          account_number: payload.accountNumber,
+          bank_code: payload.bankCode,
+          currency: 'NGN',
+        },
+        { headers: { Authorization: `Bearer ${this.secretKey}` } },
+      ),
+    );
+
+    if (!response.data?.status || !response.data.data?.recipient_code) {
+      throw new BadRequestException('Paystack transfer recipient creation failed: ' + (response.data?.message ?? 'Unknown error'));
+    }
+
+    return response.data.data.recipient_code;
+  }
+
+  private async markMockPayoutPaid(payoutId: string, approverId: string, comment?: string) {
+    await this.prisma.$transaction(async (tx) => {
+      const payout = await tx.payout.findUnique({
+        where: { id: payoutId },
+        include: { driverProfile: { select: { userId: true } } },
+      });
+      if (!payout || payout.status === 'PAID') return;
+      if (payout.status === 'FAILED') throw new BadRequestException('Payout has failed and cannot be approved.');
+
+      const paid = await tx.payout.updateMany({
+        where: { id: payoutId, status: { in: ['PENDING', 'PROCESSING'] } },
+        data: {
+          status: 'PAID',
+          processedAt: new Date(),
+          notes: comment,
+        },
+      });
+      if (paid.count !== 1) return;
+
+      await this.recordPayoutPaidLedger(tx, payout, approverId, 'mock-payout-approval');
+    });
+
+    return { success: true, status: 'PAID' };
+  }
+
+  private async handleTransferSuccess(data: PaystackWebhookPayload['data']): Promise<boolean> {
+    const transferCode = data.transfer_code;
+    if (!transferCode) return false;
+
+    await this.prisma.$transaction(async (tx) => {
+      const payout = await tx.payout.findUnique({
+        where: { providerTransferCode: transferCode },
+        include: { driverProfile: { select: { userId: true } } },
+      });
+      if (!payout || payout.status === 'PAID') return;
+
+      const paid = await tx.payout.updateMany({
+        where: { id: payout.id, status: 'PROCESSING' },
+        data: { status: 'PAID', processedAt: new Date(), transferFailureReason: null },
+      });
+      if (paid.count !== 1) return;
+
+      await this.recordPayoutPaidLedger(tx, payout, null, 'paystack-transfer-success');
+    });
+
+    return true;
+  }
+
+  private async handleTransferFailed(data: PaystackWebhookPayload['data']): Promise<boolean> {
+    const transferCode = data.transfer_code;
+    if (!transferCode) return false;
+
+    await this.prisma.$transaction(async (tx) => {
+      const payout = await tx.payout.findUnique({ where: { providerTransferCode: transferCode } });
+      if (!payout || payout.status === 'PAID') return;
+
+      await tx.payout.updateMany({
+        where: { id: payout.id, status: 'PROCESSING' },
+        data: {
+          status: 'FAILED',
+          failedAt: new Date(),
+          transferFailureReason: data.reason ?? data.gateway_response ?? data.message ?? 'Paystack transfer failed',
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: null,
+          action: 'PAYOUT_TRANSFER_FAILED',
+          entity: 'PAYOUT',
+          entityId: payout.id,
+          payload: { provider: 'paystack', transferCode, reason: data.reason ?? data.gateway_response ?? data.message } as any,
+        },
+      });
+    });
+
+    return true;
+  }
+
+  private async handleRefundEvent(event: string, data: PaystackWebhookPayload['data']): Promise<boolean> {
+    const reference = data.refund_reference ?? data.reference;
+    if (!reference) return false;
+
+    const status = event === 'refund.processed' ? 'PROCESSED' : event === 'refund.failed' ? 'FAILED' : 'PROCESSING';
+    const refund = await this.prisma.refund.findFirst({ where: { providerReference: reference } });
+    if (!refund) return true;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.refund.update({
+        where: { id: refund.id },
+        data: {
+          status,
+          processedAt: status === 'PROCESSED' ? new Date() : refund.processedAt,
+          failedAt: status === 'FAILED' ? new Date() : refund.failedAt,
+          metadata: { event, paystackStatus: data.status, reason: data.reason ?? data.message } as any,
+        },
+      });
+
+      if (status === 'PROCESSED') {
+        await tx.payment.update({ where: { id: refund.paymentId }, data: { status: 'REFUNDED' } });
+      }
+    });
+
+    return true;
+  }
+
+  private async handleDisputeEvent(event: string, data: PaystackWebhookPayload['data']): Promise<boolean> {
+    const providerDisputeId = data.dispute?.toString() ?? data.id?.toString();
+    if (!providerDisputeId) return false;
+
+    const reference = data.transaction_reference ?? data.reference ?? null;
+    const payment = reference ? await this.prisma.payment.findUnique({ where: { reference } }) : null;
+    const status = this.mapDisputeStatus(event, data.status);
+
+    await this.prisma.dispute.upsert({
+      where: { provider_providerDisputeId: { provider: 'paystack', providerDisputeId } },
+      update: {
+        paymentId: payment?.id,
+        reference,
+        status,
+        category: data.category,
+        reason: data.reason ?? data.message,
+        amount: data.amount ? minorUnitsToDecimal(BigInt(data.amount)) : undefined,
+        currency: data.currency ?? 'NGN',
+        metadata: { event, payloadStatus: data.status, metadata: data.metadata } as any,
+        resolvedAt: status === 'WON' || status === 'LOST' || status === 'CLOSED' ? new Date() : null,
+      },
+      create: {
+        paymentId: payment?.id,
+        provider: 'paystack',
+        providerDisputeId,
+        reference,
+        status,
+        category: data.category,
+        reason: data.reason ?? data.message,
+        amount: data.amount ? minorUnitsToDecimal(BigInt(data.amount)) : undefined,
+        currency: data.currency ?? 'NGN',
+        metadata: { event, payloadStatus: data.status, metadata: data.metadata } as any,
+        resolvedAt: status === 'WON' || status === 'LOST' || status === 'CLOSED' ? new Date() : null,
+      },
+    });
+
+    return true;
+  }
+
+  private mapDisputeStatus(event: string, status?: string): 'OPEN' | 'AWAITING_RESPONSE' | 'UNDER_REVIEW' | 'WON' | 'LOST' | 'CLOSED' {
+    const normalized = status?.toLowerCase();
+    if (normalized === 'won') return 'WON';
+    if (normalized === 'lost') return 'LOST';
+    if (normalized === 'resolved') return 'CLOSED';
+    if (event === 'charge.dispute.resolve') return 'CLOSED';
+    if (event === 'charge.dispute.remind') return 'AWAITING_RESPONSE';
+    return 'OPEN';
+  }
+
+  private async recordPayoutPaidLedger(tx: any, payout: any, approverId: string | null, source: string) {
+    const amountMinor = decimalToMinorUnits(payout.amount);
+
+    await this.paymentsService.recordWalletEvent(tx, {
+      eventType: 'DRIVER_PAYOUT_PAID',
+      reference: `payout:${payout.id}:paid:wallet`,
+      referenceType: 'PAYOUT',
+      referenceId: payout.id,
+      payoutId: payout.id,
+      userId: payout.driverProfile.userId,
+      currency: payout.currency,
+      amountMinor,
+      transactionType: 'DEBIT',
+      description: 'Driver payout paid',
+      metadata: { approverId, source },
+    });
+
+    await this.paymentsService.recordAccountEvent(tx, {
+      eventType: 'DRIVER_PAYOUT_PAID',
+      reference: `payout:${payout.id}:paid:driver-payable`,
+      referenceType: 'PAYOUT',
+      referenceId: payout.id,
+      payoutId: payout.id,
+      currency: payout.currency,
+      amountMinor,
+      account: LEDGER_ACCOUNTS.DRIVER_PAYABLE,
+      transactionType: 'DEBIT',
+      description: 'Driver payable reduced after payout',
+      metadata: { approverId, source },
+    });
+
+    await this.paymentsService.recordAccountEvent(tx, {
+      eventType: 'DRIVER_PAYOUT_PAID',
+      reference: `payout:${payout.id}:paid:clearing`,
+      referenceType: 'PAYOUT',
+      referenceId: payout.id,
+      payoutId: payout.id,
+      currency: payout.currency,
+      amountMinor,
+      account: LEDGER_ACCOUNTS.PAYOUT_CLEARING,
+      transactionType: 'CREDIT',
+      description: 'Payout clearing recorded as paid',
+      metadata: { approverId, source },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorId: approverId,
+        action: 'PAYOUT_PAID',
+        entity: 'PAYOUT',
+        entityId: payout.id,
+        payload: { source, eventType: 'DRIVER_PAYOUT_PAID' } as any,
+      },
+    });
+  }
+
+  private formatBankAccount(bankAccount: any) {
+    return {
+      id: bankAccount.id,
+      bankCode: bankAccount.bankCode,
+      bankName: bankAccount.bankName,
+      accountName: bankAccount.accountName,
+      accountNumberLast4: bankAccount.accountNumberLast4,
+      currency: bankAccount.currency,
+      provider: bankAccount.provider,
+      hasRecipient: Boolean(bankAccount.paystackRecipientCode),
+      recipientCreatedAt: bankAccount.recipientCreatedAt,
+      updatedAt: bankAccount.updatedAt,
+    };
   }
 
   private formatPaymentResponse(payment: any) {

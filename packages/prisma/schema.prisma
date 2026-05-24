@@ -54,6 +54,23 @@ enum PayoutStatus {
   CANCELLED
 }
 
+enum RefundStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+  CANCELLED
+}
+
+enum DisputeStatus {
+  OPEN
+  AWAITING_RESPONSE
+  UNDER_REVIEW
+  WON
+  LOST
+  CLOSED
+}
+
 enum DocumentStatus {
   PENDING
   APPROVED
@@ -234,11 +251,32 @@ model DriverProfile {
 
   vehicles        Vehicle[]        @relation("DriverVehicles")
   payouts         Payout[]
+  bankAccount     DriverBankAccount?
   driverDocuments DriverDocument[] @relation("driverProfileDocuments")
   trips           Trip[]
   activeVehicle   Vehicle?         @relation("ActiveDriverVehicle", fields: [activeVehicleId], references: [id])
 
   @@index([currentStatus, isOnline])
+}
+
+model DriverBankAccount {
+  id                    String        @id @default(uuid()) @db.Uuid
+  driverProfile         DriverProfile @relation(fields: [driverProfileId], references: [id])
+  driverProfileId       String        @unique @db.Uuid
+  bankCode              String
+  bankName              String?
+  accountName           String
+  accountNumberLast4    String
+  currency              String        @default("NGN")
+  provider              String        @default("paystack")
+  paystackRecipientCode String?       @unique
+  recipientCreatedAt    DateTime?
+  metadata              Json?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  deletedAt             DateTime?
+
+  @@index([provider, paystackRecipientCode])
 }
 
 model Vehicle {
@@ -445,6 +483,8 @@ model Payment {
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   financialTransactions FinancialTransaction[]
+  refunds               Refund[]
+  disputes              Dispute[]
 
   @@index([status, provider])
   @@index([userId, createdAt])
@@ -561,6 +601,10 @@ model Payout {
   status                PayoutStatus           @default(PENDING)
   provider              String
   providerReference     String?
+  providerTransferId    String?
+  providerTransferCode  String?                @unique
+  transferFailureReason String?
+  transferInitiatedAt   DateTime?
   scheduledAt           DateTime?
   processedAt           DateTime?
   failedAt              DateTime?
@@ -570,6 +614,53 @@ model Payout {
   financialTransactions FinancialTransaction[]
 
   @@index([driverProfileId, status])
+  @@index([provider, providerTransferCode])
+}
+
+model Refund {
+  id               String       @id @default(uuid()) @db.Uuid
+  payment          Payment      @relation(fields: [paymentId], references: [id])
+  paymentId        String       @db.Uuid
+  amount           Decimal      @db.Decimal(12, 2)
+  currency         String       @default("NGN")
+  status           RefundStatus @default(PENDING)
+  provider         String
+  providerReference String?
+  providerRefundId String?
+  reason           String?
+  metadata         Json?
+  requestedById    String?      @db.Uuid
+  processedAt      DateTime?
+  failedAt         DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([paymentId, status])
+  @@index([provider, providerReference])
+  @@index([status, createdAt])
+}
+
+model Dispute {
+  id                String        @id @default(uuid()) @db.Uuid
+  payment           Payment?      @relation(fields: [paymentId], references: [id])
+  paymentId         String?       @db.Uuid
+  provider          String
+  providerDisputeId String
+  reference         String?
+  status            DisputeStatus @default(OPEN)
+  category          String?
+  reason            String?
+  amount            Decimal?      @db.Decimal(12, 2)
+  currency          String        @default("NGN")
+  metadata          Json?
+  resolvedAt        DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@unique([provider, providerDisputeId])
+  @@index([paymentId, status])
+  @@index([provider, reference])
+  @@index([status, createdAt])
 }
 
 model Rating {

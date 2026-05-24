@@ -266,6 +266,9 @@ describe('PaymentsService ownership & isolation', () => {
 
 describe('AdminService.approvePayout state validation', () => {
   let adminService: AdminService;
+  const mockPaystackService = {
+    initiatePayoutTransfer: jest.fn(),
+  };
 
   const mockPrisma: any = {
     $transaction: jest.fn((callback) => callback(mockPrisma)),
@@ -309,28 +312,29 @@ describe('AdminService.approvePayout state validation', () => {
     mockPrisma.wallet.upsert.mockResolvedValue({ id: 'wallet-1', balance: { toString: () => '400.00' } });
     mockPrisma.wallet.update.mockResolvedValue({ id: 'wallet-1', balance: { toString: () => '0.00' } });
     mockPrisma.walletTransaction.create.mockResolvedValue({});
-    adminService = new AdminService(mockPrisma as any);
+    mockPaystackService.initiatePayoutTransfer.mockResolvedValue({ success: true, status: 'PAID' });
+    adminService = new AdminService(mockPrisma as any, mockPaystackService as any);
   });
 
   it('throws NotFoundException when payout does not exist', async () => {
     mockPrisma.payout.findUnique.mockResolvedValue(null);
 
     await expect(adminService.approvePayout('admin-1', 'nonexistent-id')).rejects.toThrow(NotFoundException);
-    expect(mockPrisma.payout.updateMany).not.toHaveBeenCalled();
+    expect(mockPaystackService.initiatePayoutTransfer).not.toHaveBeenCalled();
   });
 
   it('throws BadRequestException when payout is already PAID', async () => {
     mockPrisma.payout.findUnique.mockResolvedValue({ id: 'payout-1', status: 'PAID' });
 
     await expect(adminService.approvePayout('admin-1', 'payout-1')).rejects.toThrow(BadRequestException);
-    expect(mockPrisma.payout.updateMany).not.toHaveBeenCalled();
+    expect(mockPaystackService.initiatePayoutTransfer).not.toHaveBeenCalled();
   });
 
   it('throws BadRequestException when payout status is FAILED', async () => {
     mockPrisma.payout.findUnique.mockResolvedValue({ id: 'payout-1', status: 'FAILED' });
 
     await expect(adminService.approvePayout('admin-1', 'payout-1')).rejects.toThrow(BadRequestException);
-    expect(mockPrisma.payout.updateMany).not.toHaveBeenCalled();
+    expect(mockPaystackService.initiatePayoutTransfer).not.toHaveBeenCalled();
   });
 
   it('approves a PENDING payout and logs the action', async () => {
@@ -346,19 +350,7 @@ describe('AdminService.approvePayout state validation', () => {
 
     const result = await adminService.approvePayout('admin-1', 'payout-1', 'Looks good');
     expect(result.success).toBe(true);
-    expect(mockPrisma.payout.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'payout-1', status: { in: ['PENDING', 'PROCESSING'] } },
-        data: expect.objectContaining({ status: 'PAID' }),
-      })
-    );
-    expect(mockPrisma.financialTransaction.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ eventType: 'DRIVER_PAYOUT_PAID', amount: '400.00' }),
-      })
-    );
-    expect(mockPrisma.walletTransaction.create).toHaveBeenCalled();
-    expect(mockPrisma.auditLog.create).toHaveBeenCalled();
+    expect(mockPaystackService.initiatePayoutTransfer).toHaveBeenCalledWith('payout-1', 'admin-1', 'Looks good');
   });
 
   it('approves a PROCESSING payout', async () => {
@@ -374,6 +366,6 @@ describe('AdminService.approvePayout state validation', () => {
 
     const result = await adminService.approvePayout('admin-1', 'payout-1');
     expect(result.success).toBe(true);
-    expect(mockPrisma.payout.updateMany).toHaveBeenCalled();
+    expect(mockPaystackService.initiatePayoutTransfer).toHaveBeenCalledWith('payout-1', 'admin-1', undefined);
   });
 });

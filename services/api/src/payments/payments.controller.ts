@@ -5,12 +5,15 @@ import { DriverOnlyGuard } from '../auth/driver-only.guard';
 import { PaymentsService } from './payments.service';
 import { InitiateMockPaymentDto } from './dto/initiate-mock-payment.dto';
 import { IdempotencyService } from '../idempotency/idempotency.service';
+import { PaystackService } from './paystack.service';
+import { SaveDriverBankAccountDto } from './dto/save-driver-bank-account.dto';
 
 @Controller('payments')
 export class PaymentsController {
   constructor(
     private readonly paymentsService: PaymentsService,
-    private readonly idempotencyService: IdempotencyService
+    private readonly idempotencyService: IdempotencyService,
+    private readonly paystackService: PaystackService,
   ) {}
 
   @Post('mock/initiate')
@@ -40,5 +43,17 @@ export class PaymentsController {
   @UseGuards(JwtAuthGuard, DriverOnlyGuard)
   getDriverPayouts(@Req() req: any, @Query('limit') limit?: string, @Query('offset') offset?: string) {
     return this.paymentsService.getDriverPayouts(req.user.userId, Number(limit) || 20, Number(offset) || 0);
+  }
+
+  @Post('drivers/bank-account')
+  @UseGuards(JwtAuthGuard, DriverOnlyGuard)
+  saveDriverBankAccount(@Req() req: any, @Body() body: SaveDriverBankAccountDto) {
+    return this.paystackService.saveDriverBankAccount(req.user.userId, body);
+  }
+
+  @Get('drivers/bank-account')
+  @UseGuards(JwtAuthGuard, DriverOnlyGuard)
+  getDriverBankAccount(@Req() req: any) {
+    return this.paystackService.getDriverBankAccount(req.user.userId);
   }
 }

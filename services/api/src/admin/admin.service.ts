@@ -1,23 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewDriverDocumentDto } from '../drivers/dto/review-driver-document.dto';
 import { ReviewVehicleDto } from './dto/review-vehicle.dto';
+import { PaystackService } from '../payments/paystack.service';
 
 const INCIDENT_SEVERITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 const INCIDENT_STATUSES = ['OPEN', 'INVESTIGATING', 'RESOLVED', 'CLOSED'];
-const PAYOUT_CLEARING_ACCOUNT = {
-  code: 'platform:payout_clearing:NGN',
-  name: 'Payout clearing',
-  accountType: 'LIABILITY',
-};
-const DRIVER_PAYABLE_ACCOUNT = {
-  code: 'platform:driver_payable:NGN',
-  name: 'Driver payable',
-  accountType: 'LIABILITY',
-};
-
-type FinancialTx = Prisma.TransactionClient;
 
 function clampPagination(limit = 20, offset = 0) {
   const safeLimit = Number.isFinite(limit) ? Math.min(Math.max(Math.trunc(limit), 1), 100) : 20;
@@ -25,23 +13,12 @@ function clampPagination(limit = 20, offset = 0) {
   return { limit: safeLimit, offset: safeOffset };
 }
 
-function decimalToMinorUnits(value: { toString(): string }): bigint {
-  const [wholePart, fractionPart = ''] = value.toString().split('.');
-  const normalizedFraction = `${fractionPart}00`.slice(0, 2);
-  return BigInt(wholePart) * 100n + BigInt(normalizedFraction);
-}
-
-function minorUnitsToDecimal(units: bigint): string {
-  const sign = units < 0n ? '-' : '';
-  const absolute = units < 0n ? -units : units;
-  const whole = absolute / 100n;
-  const fraction = (absolute % 100n).toString().padStart(2, '0');
-  return `${sign}${whole}.${fraction}`;
-}
-
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly paystackService: PaystackService,
+  ) {}
 
   async approveKyc(reviewerId: string, userId: string, comment?: string) {
     await this.prisma.kycCheck.updateMany({
@@ -67,66 +44,7 @@ export class AdminService {
     if (payout.status === 'PAID') throw new BadRequestException('Payout has already been paid.');
     if (payout.status === 'FAILED') throw new BadRequestException('Payout has failed and cannot be approved.');
 
-    await this.prisma.$transaction(async (tx) => {
-      const paid = await tx.payout.updateMany({
-        where: { id: payoutId, status: { in: ['PENDING', 'PROCESSING'] } },
-        data: {
-          status: 'PAID',
-          processedAt: new Date(),
-          notes: comment
-        }
-      });
-      if (paid.count !== 1) return;
-
-      const amountMinor = decimalToMinorUnits(payout.amount);
-
-      await this.recordWalletEvent(tx, {
-        reference: `payout:${payout.id}:paid:wallet`,
-        referenceType: 'PAYOUT',
-        referenceId: payout.id,
-        payoutId: payout.id,
-        userId: payout.driverProfile.userId,
-        currency: payout.currency,
-        amountMinor,
-        transactionType: 'DEBIT',
-        description: 'Driver payout paid',
-        metadata: { approverId, previousStatus: payout.status },
-      });
-
-      await this.recordAccountEvent(tx, {
-        reference: `payout:${payout.id}:paid:driver-payable`,
-        referenceType: 'PAYOUT',
-        referenceId: payout.id,
-        payoutId: payout.id,
-        currency: payout.currency,
-        amountMinor,
-        account: DRIVER_PAYABLE_ACCOUNT,
-        transactionType: 'DEBIT',
-        description: 'Driver payable reduced after payout',
-        metadata: { approverId, previousStatus: payout.status },
-      });
-
-      await this.recordAccountEvent(tx, {
-        reference: `payout:${payout.id}:paid:clearing`,
-        referenceType: 'PAYOUT',
-        referenceId: payout.id,
-        payoutId: payout.id,
-        currency: payout.currency,
-        amountMinor,
-        account: PAYOUT_CLEARING_ACCOUNT,
-        transactionType: 'CREDIT',
-        description: 'Payout clearing recorded as paid',
-        metadata: { approverId, previousStatus: payout.status },
-      });
-
-      await this.logAdminActionInTransaction(tx, approverId, 'PAYOUT_APPROVE', payoutId, {
-        comment,
-        previousStatus: payout.status,
-        eventType: 'DRIVER_PAYOUT_PAID',
-      });
-    });
-
-    return { success: true };
+    return this.paystackService.initiatePayoutTransfer(payoutId, approverId, comment);
   }
 
   async dispatchTask(adminId: string, tripId: string, driverId: string) {
@@ -429,177 +347,4 @@ export class AdminService {
     });
   }
 
-  private async logAdminActionInTransaction(
-    tx: FinancialTx,
-    actorId: string,
-    action: string,
-    entityId: string,
-    details: Record<string, unknown>
-  ) {
-    return tx.auditLog.create({
-      data: {
-        actorId,
-        action,
-        entity: 'ADMIN',
-        entityId,
-        payload: { details } as any
-      }
-    });
-  }
-
-  private signedAmount(amountMinor: bigint, transactionType: 'CREDIT' | 'DEBIT'): string {
-    return minorUnitsToDecimal(transactionType === 'DEBIT' ? -amountMinor : amountMinor);
-  }
-
-  private async ensureLedgerAccount(
-    tx: FinancialTx,
-    account: { code: string; name: string; accountType: string },
-    currency: string
-  ) {
-    return tx.ledgerAccount.upsert({
-      where: { code: account.code },
-      update: {},
-      create: {
-        code: account.code,
-        name: account.name,
-        accountType: account.accountType,
-        currency,
-      },
-    });
-  }
-
-  private async recordAccountEvent(
-    tx: FinancialTx,
-    input: {
-      reference: string;
-      referenceType: string;
-      referenceId: string;
-      payoutId: string;
-      currency: string;
-      amountMinor: bigint;
-      account: { code: string; name: string; accountType: string };
-      transactionType: 'CREDIT' | 'DEBIT';
-      description: string;
-      metadata?: Record<string, unknown>;
-    }
-  ) {
-    const existing = await tx.financialTransaction.findUnique({ where: { reference: input.reference } });
-    if (existing) return existing;
-
-    const account = await this.ensureLedgerAccount(tx, input.account, input.currency);
-    const updatedAccount = await tx.ledgerAccount.update({
-      where: { id: account.id },
-      data: { balance: { increment: this.signedAmount(input.amountMinor, input.transactionType) } },
-    });
-
-    const financialTransaction = await tx.financialTransaction.create({
-      data: {
-        eventType: 'DRIVER_PAYOUT_PAID',
-        reference: input.reference,
-        referenceType: input.referenceType,
-        referenceId: input.referenceId,
-        payoutId: input.payoutId,
-        currency: input.currency,
-        amount: minorUnitsToDecimal(input.amountMinor),
-        metadata: input.metadata as any,
-      },
-    });
-
-    await tx.ledgerEntry.create({
-      data: {
-        ledgerAccountId: account.id,
-        financialTransactionId: financialTransaction.id,
-        eventType: 'DRIVER_PAYOUT_PAID',
-        transactionType: input.transactionType,
-        amount: minorUnitsToDecimal(input.amountMinor),
-        balanceAfter: updatedAccount.balance,
-        referenceType: input.referenceType,
-        referenceId: input.referenceId,
-        description: input.description,
-        metadata: input.metadata as any,
-      },
-    });
-
-    return financialTransaction;
-  }
-
-  private async recordWalletEvent(
-    tx: FinancialTx,
-    input: {
-      reference: string;
-      referenceType: string;
-      referenceId: string;
-      payoutId: string;
-      userId: string;
-      currency: string;
-      amountMinor: bigint;
-      transactionType: 'CREDIT' | 'DEBIT';
-      description: string;
-      metadata?: Record<string, unknown>;
-    }
-  ) {
-    const existing = await tx.financialTransaction.findUnique({ where: { reference: input.reference } });
-    if (existing) return existing;
-
-    const wallet = await tx.wallet.upsert({
-      where: { userId: input.userId },
-      update: {},
-      create: {
-        userId: input.userId,
-        currency: input.currency,
-      },
-    });
-
-    const balanceBefore = wallet.balance;
-    const updatedWallet = await tx.wallet.update({
-      where: { id: wallet.id },
-      data: { balance: { increment: this.signedAmount(input.amountMinor, input.transactionType) } },
-    });
-
-    const financialTransaction = await tx.financialTransaction.create({
-      data: {
-        eventType: 'DRIVER_PAYOUT_PAID',
-        reference: input.reference,
-        referenceType: input.referenceType,
-        referenceId: input.referenceId,
-        payoutId: input.payoutId,
-        currency: input.currency,
-        amount: minorUnitsToDecimal(input.amountMinor),
-        metadata: input.metadata as any,
-      },
-    });
-
-    await tx.ledgerEntry.create({
-      data: {
-        walletId: wallet.id,
-        financialTransactionId: financialTransaction.id,
-        eventType: 'DRIVER_PAYOUT_PAID',
-        transactionType: input.transactionType,
-        amount: minorUnitsToDecimal(input.amountMinor),
-        balanceAfter: updatedWallet.balance,
-        referenceType: input.referenceType,
-        referenceId: input.referenceId,
-        description: input.description,
-        metadata: input.metadata as any,
-      },
-    });
-
-    await tx.walletTransaction.create({
-      data: {
-        walletId: wallet.id,
-        financialTransactionId: financialTransaction.id,
-        eventType: 'DRIVER_PAYOUT_PAID',
-        transactionType: input.transactionType,
-        amount: minorUnitsToDecimal(input.amountMinor),
-        balanceBefore,
-        balanceAfter: updatedWallet.balance,
-        referenceType: input.referenceType,
-        referenceId: input.referenceId,
-        description: input.description,
-        metadata: input.metadata as any,
-      },
-    });
-
-    return financialTransaction;
-  }
 }
