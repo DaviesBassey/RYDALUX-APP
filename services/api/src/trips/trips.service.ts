@@ -692,6 +692,7 @@ export class TripsService {
       distanceMeters: trip.distanceMeters,
       durationSeconds: trip.durationSeconds,
       notes: trip.notes,
+      safetyFlagged: trip.safetyFlagged ?? false,
       createdAt: trip.createdAt,
       updatedAt: trip.updatedAt
     };

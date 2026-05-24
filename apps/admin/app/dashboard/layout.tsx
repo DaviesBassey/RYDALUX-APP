@@ -10,6 +10,7 @@ const NAV = [
   { href: '/dashboard/kyc', label: 'KYC Review' },
   { href: '/dashboard/drivers', label: 'Driver Documents' },
   { href: '/dashboard/vehicles', label: 'Vehicle Approval' },
+  { href: '/dashboard/safety', label: 'Safety' },
 ];
 
 function DashboardShell({ children }: { children: ReactNode }) {

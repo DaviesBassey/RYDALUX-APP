@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { AdminService } from './admin.service';
 import { PaymentsService } from '../payments/payments.service';
@@ -10,6 +10,8 @@ import { ApproveKycDto } from './dto/approve-kyc.dto';
 import { ApprovePayoutDto } from './dto/approve-payout.dto';
 import { DispatchTaskDto } from './dto/dispatch-task.dto';
 import { ReportIncidentDto } from './dto/report-incident.dto';
+import { ResolveSosEventDto } from './dto/resolve-sos-event.dto';
+import { UpdateIncidentStatusDto } from './dto/update-incident-status.dto';
 import { ReviewDriverDocumentDto } from '../drivers/dto/review-driver-document.dto';
 import { ReviewVehicleDto } from './dto/review-vehicle.dto';
 
@@ -85,6 +87,32 @@ export class AdminController {
   @Permissions('READ_ONLY_AUDITOR')
   getAuditLogs() {
     return this.adminService.getAuditLogs();
+  }
+
+  @Get('sos-events')
+  @Permissions('SAFETY_OFFICER')
+  listSosEvents(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.adminService.listSosEvents(Number(limit) || 20, Number(offset) || 0);
+  }
+
+  @Get('incidents')
+  @Permissions('SAFETY_OFFICER')
+  listIncidents(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.adminService.listIncidents(Number(limit) || 20, Number(offset) || 0);
+  }
+
+  @Patch('sos-events/:id/resolve')
+  @Permissions('SAFETY_OFFICER')
+  resolveSosEvent(@Req() req: Request, @Param('id') id: string, @Body() body: ResolveSosEventDto) {
+    const user = req.user as any;
+    return this.adminService.resolveSosEvent(user.userId, id, body.notes);
+  }
+
+  @Patch('incidents/:id/status')
+  @Permissions('SAFETY_OFFICER')
+  updateIncidentStatus(@Req() req: Request, @Param('id') id: string, @Body() body: UpdateIncidentStatusDto) {
+    const user = req.user as any;
+    return this.adminService.updateIncidentStatus(user.userId, id, body.status);
   }
 
   @Get('payments')

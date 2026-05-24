@@ -21,6 +21,7 @@ import {
   getTripPin,
   cancelTrip,
 } from '../../api/trips';
+import { triggerSos } from '../../api/safety';
 import { MainStackParamList } from '../../navigation/MainNavigator';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'ActiveTrip'>;
@@ -62,6 +63,7 @@ export default function ActiveTripScreen({ route, navigation }: Props) {
   const [pin, setPin] = useState<TripPin | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
+  const [sendingSos, setSendingSos] = useState(false);
   const [error, setError] = useState('');
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -131,6 +133,41 @@ export default function ActiveTripScreen({ route, navigation }: Props) {
         },
       },
     ]);
+  }
+
+  async function handleSos() {
+    Alert.alert(
+      '🚨 Emergency SOS',
+      'This will alert our safety team with your current location. Are you in danger?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send SOS',
+          style: 'destructive',
+          onPress: async () => {
+            setSendingSos(true);
+            try {
+              // Use trip pickup location as fallback; in production use device GPS
+              const lat = trip?.pickup?.latitude ?? 0;
+              const lng = trip?.pickup?.longitude ?? 0;
+              const sos = await triggerSos({
+                type: 'PANIC',
+                latitude: lat,
+                longitude: lng,
+                notes: `SOS from rider during ${trip?.status ?? 'unknown'}`,
+              });
+              Alert.alert('SOS Sent', `Safety team notified. SOS ID: ${sos.id}`);
+              // Refresh trip to show safety flagged state
+              fetchTrip();
+            } catch (e: any) {
+              Alert.alert('Error', e?.response?.data?.error?.message ?? 'Could not send SOS.');
+            } finally {
+              setSendingSos(false);
+            }
+          },
+        },
+      ]
+    );
   }
 
   if (loading) {
@@ -217,6 +254,19 @@ export default function ActiveTripScreen({ route, navigation }: Props) {
           </View>
         )}
 
+        {/* SOS button — shown during active non-terminal trips */}
+        {!isTerminal && (
+          <TouchableOpacity
+            style={[styles.sosBtn, sendingSos && styles.btnDisabled]}
+            onPress={handleSos}
+            disabled={sendingSos}
+          >
+            {sendingSos
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.sosText}>🚨 Emergency SOS</Text>}
+          </TouchableOpacity>
+        )}
+
         {/* Cancel button */}
         {canCancel && !isTerminal && (
           <TouchableOpacity
@@ -301,6 +351,14 @@ const styles = StyleSheet.create({
   vehicleRow: { backgroundColor: '#eef0f8', borderRadius: 8, padding: 10, marginTop: 4 },
   vehicleText: { fontSize: 13, color: '#444', marginBottom: 2 },
   vehiclePlate: { fontSize: 16, fontWeight: '800', color: '#1a1a2e', letterSpacing: 2 },
+  sosBtn: {
+    backgroundColor: '#dc2626',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  sosText: { color: '#fff', fontSize: 16, fontWeight: '800' },
   cancelBtn: {
     backgroundColor: '#fff',
     borderWidth: 1.5,

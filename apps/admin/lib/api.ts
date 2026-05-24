@@ -160,6 +160,46 @@ async function fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export interface SosEventItem {
+  id: string;
+  type: string;
+  status: string;
+  latitude: number;
+  longitude: number;
+  notes: string | null;
+  triggeredAt: string;
+  resolvedAt: string | null;
+  user: { id: string; displayName: string | null; phone: string | null };
+  trip: { id: string; reference: string; status: string } | null;
+}
+
+export interface SosEventsResponse {
+  items: SosEventItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface IncidentItem {
+  id: string;
+  tripId: string;
+  severity: string;
+  status: string;
+  description: string;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  reportedBy: { id: string; displayName: string | null };
+  trip: { id: string; reference: string; status: string } | null;
+}
+
+export interface IncidentsResponse {
+  items: IncidentItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export const api = {
   login: (body: AdminLoginRequest) => fetchJson<TokenResponse>('/auth/admin/login', { method: 'POST', body: JSON.stringify(body) }),
   health: () => fetchJson<HealthResponse>('/health'),
@@ -172,4 +212,10 @@ export const api = {
   reviewVehicle: (vehicleId: string, action: 'approve' | 'reject' | 'suspend' | 'reactivate', rejectionReason?: string) =>
     fetchJson<{ success: boolean }>(`/admin/vehicles/${vehicleId}/review`, { method: 'POST', body: JSON.stringify({ action, rejectionReason }) }),
   getAuditLogs: () => fetchJson<AuditLogItem[]>('/admin/audit-logs'),
+  getSosEvents: (limit = 20, offset = 0) => fetchJson<SosEventsResponse>(`/admin/sos-events?limit=${limit}&offset=${offset}`),
+  getIncidents: (limit = 20, offset = 0) => fetchJson<IncidentsResponse>(`/admin/incidents?limit=${limit}&offset=${offset}`),
+  resolveSosEvent: (id: string, notes?: string) => fetchJson<{ success: boolean }>(`/admin/sos-events/${id}/resolve`, { method: 'PATCH', body: JSON.stringify({ notes }) }),
+  updateIncidentStatus: (id: string, status: string) => fetchJson<{ success: boolean }>(`/admin/incidents/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  reportIncident: (tripId: string, description: string, severity?: string) =>
+    fetchJson<{ success: boolean; incidentId?: string }>('/admin/incidents/report', { method: 'POST', body: JSON.stringify({ tripId, description, severity }) }),
 };

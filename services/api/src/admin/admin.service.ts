@@ -3,6 +3,15 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ReviewDriverDocumentDto } from '../drivers/dto/review-driver-document.dto';
 import { ReviewVehicleDto } from './dto/review-vehicle.dto';
 
+const INCIDENT_SEVERITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+const INCIDENT_STATUSES = ['OPEN', 'INVESTIGATING', 'RESOLVED', 'CLOSED'];
+
+function clampPagination(limit = 20, offset = 0) {
+  const safeLimit = Number.isFinite(limit) ? Math.min(Math.max(Math.trunc(limit), 1), 100) : 20;
+  const safeOffset = Number.isFinite(offset) ? Math.max(Math.trunc(offset), 0) : 0;
+  return { limit: safeLimit, offset: safeOffset };
+}
+
 @Injectable()
 export class AdminService {
   constructor(private readonly prisma: PrismaService) {}
@@ -55,8 +64,29 @@ export class AdminService {
   }
 
   async reportIncident(adminId: string, tripId: string, description: string, severity?: string) {
-    await this.logAdminAction(adminId, 'REPORT_INCIDENT', tripId, { description, severity });
-    return { success: true };
+    const trip = await this.prisma.trip.findUnique({ where: { id: tripId }, select: { id: true } });
+    if (!trip) throw new NotFoundException('Trip not found.');
+
+    const incidentSeverity = severity ?? 'MEDIUM';
+    if (!INCIDENT_SEVERITIES.includes(incidentSeverity)) {
+      throw new BadRequestException(`Severity must be one of: ${INCIDENT_SEVERITIES.join(', ')}`);
+    }
+
+    const existingIncident = await this.prisma.incidentReport.findUnique({ where: { tripId }, select: { id: true } });
+    if (existingIncident) throw new BadRequestException('An incident has already been reported for this trip.');
+
+    const incident = await this.prisma.incidentReport.create({
+      data: {
+        tripId,
+        reportedById: adminId,
+        severity: incidentSeverity as any,
+        status: 'OPEN',
+        description,
+      },
+    });
+
+    await this.logAdminAction(adminId, 'REPORT_INCIDENT', tripId, { incidentId: incident.id, description, severity });
+    return { success: true, incidentId: incident.id };
   }
 
   async reviewDriverDocument(adminId: string, documentId: string, payload: ReviewDriverDocumentDto) {
@@ -200,6 +230,112 @@ export class AdminService {
 
   async getAuditLogs() {
     return this.prisma.auditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 100 });
+  }
+
+  async listSosEvents(limit = 20, offset = 0) {
+    const page = clampPagination(limit, offset);
+    const [items, total] = await Promise.all([
+      this.prisma.sosEvent.findMany({
+        orderBy: { triggeredAt: 'desc' },
+        include: {
+          user: { select: { id: true, displayName: true, phone: true } },
+          trip: { select: { id: true, reference: true, status: true } },
+        },
+        skip: page.offset,
+        take: page.limit,
+      }),
+      this.prisma.sosEvent.count(),
+    ]);
+
+    return {
+      items: items.map((s) => ({
+        id: s.id,
+        type: s.type,
+        status: s.status,
+        latitude: s.latitude,
+        longitude: s.longitude,
+        notes: s.notes,
+        triggeredAt: s.triggeredAt,
+        resolvedAt: s.resolvedAt,
+        user: s.user,
+        trip: s.trip,
+      })),
+      total,
+      limit: page.limit,
+      offset: page.offset,
+    };
+  }
+
+  async listIncidents(limit = 20, offset = 0) {
+    const page = clampPagination(limit, offset);
+    const [items, total] = await Promise.all([
+      this.prisma.incidentReport.findMany({
+        orderBy: { createdAt: 'desc' },
+        include: {
+          reportedBy: { select: { id: true, displayName: true } },
+          trip: { select: { id: true, reference: true, status: true } },
+        },
+        skip: page.offset,
+        take: page.limit,
+      }),
+      this.prisma.incidentReport.count(),
+    ]);
+
+    return {
+      items: items.map((i) => ({
+        id: i.id,
+        tripId: i.tripId,
+        severity: i.severity,
+        status: i.status,
+        description: i.description,
+        resolvedAt: i.resolvedAt,
+        createdAt: i.createdAt,
+        updatedAt: i.updatedAt,
+        reportedBy: i.reportedBy,
+        trip: i.trip,
+      })),
+      total,
+      limit: page.limit,
+      offset: page.offset,
+    };
+  }
+
+  async resolveSosEvent(adminId: string, sosEventId: string, notes?: string) {
+    const sos = await this.prisma.sosEvent.findUnique({ where: { id: sosEventId } });
+    if (!sos) throw new NotFoundException('SOS event not found.');
+    if (sos.status === 'RESOLVED') throw new BadRequestException('SOS event is already resolved.');
+
+    await this.prisma.sosEvent.update({
+      where: { id: sosEventId },
+      data: { status: 'RESOLVED', resolvedAt: new Date(), notes: notes ?? sos.notes },
+    });
+
+    await this.logAdminAction(adminId, 'SOS_RESOLVED', sosEventId, { previousStatus: sos.status, notes });
+    return { success: true };
+  }
+
+  async updateIncidentStatus(adminId: string, incidentId: string, status: string) {
+    const incident = await this.prisma.incidentReport.findUnique({ where: { id: incidentId } });
+    if (!incident) throw new NotFoundException('Incident not found.');
+
+    if (!INCIDENT_STATUSES.includes(status)) {
+      throw new BadRequestException(`Status must be one of: ${INCIDENT_STATUSES.join(', ')}`);
+    }
+
+    const updateData: any = { status: status as any };
+    if (status === 'RESOLVED' || status === 'CLOSED') {
+      updateData.resolvedAt = new Date();
+    } else {
+      updateData.resolvedAt = null;
+    }
+
+    await this.prisma.incidentReport.update({
+      where: { id: incidentId },
+      data: updateData,
+    });
+
+    await this.logAdminAction(adminId, 'INCIDENT_STATUS_UPDATED', incidentId, { previousStatus: incident.status, newStatus: status });
+    return { success: true };
   }
 
   async logAdminAction(actorId: string, action: string, entityId: string, details: any = {}) {

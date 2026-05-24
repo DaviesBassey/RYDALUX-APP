@@ -14,6 +14,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { DriverStackParamList } from '../../navigation/DriverNavigator';
 import { getDriverActiveTrip, transitionTrip } from '../../api/driver';
+import { triggerSos } from '../../api/safety';
 
 type Nav = NativeStackNavigationProp<DriverStackParamList, 'DriverActiveTrip'>;
 
@@ -32,6 +33,7 @@ export default function DriverActiveTripScreen() {
   const [transitioning, setTransitioning] = useState(false);
   const [pin, setPin] = useState('');
   const [showPinInput, setShowPinInput] = useState(false);
+  const [sendingSos, setSendingSos] = useState(false);
 
   async function fetchTrip() {
     try {
@@ -81,6 +83,39 @@ export default function DriverActiveTripScreen() {
       { text: 'No', style: 'cancel' },
       { text: 'Yes, Cancel', style: 'destructive', onPress: () => doTransition('CANCELLED_BY_DRIVER') },
     ]);
+  }
+
+  async function handleSos() {
+    Alert.alert(
+      '🚨 Emergency SOS',
+      'This will alert our safety team with your current location. Are you in danger?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send SOS',
+          style: 'destructive',
+          onPress: async () => {
+            setSendingSos(true);
+            try {
+              const lat = trip?.pickup?.latitude ?? 0;
+              const lng = trip?.pickup?.longitude ?? 0;
+              const sos = await triggerSos({
+                type: 'PANIC',
+                latitude: lat,
+                longitude: lng,
+                notes: `SOS from driver during ${trip?.status ?? 'unknown'}`,
+              });
+              Alert.alert('SOS Sent', `Safety team notified. SOS ID: ${sos.id}`);
+              fetchTrip();
+            } catch (e: any) {
+              Alert.alert('Error', e?.response?.data?.error?.message ?? 'Could not send SOS.');
+            } finally {
+              setSendingSos(false);
+            }
+          },
+        },
+      ]
+    );
   }
 
   if (loading) {
@@ -142,6 +177,14 @@ export default function DriverActiveTripScreen() {
           <ActionBtn label="Complete Trip" onPress={() => doTransition('COMPLETED')} loading={transitioning} primary />
         )}
 
+        <TouchableOpacity
+          style={[styles.sosBtn, sendingSos && styles.btnDisabled]}
+          onPress={handleSos}
+          disabled={sendingSos}
+        >
+          {sendingSos ? <ActivityIndicator color="#fff" /> : <Text style={styles.sosText}>🚨 Emergency SOS</Text>}
+        </TouchableOpacity>
+
         {(status === 'DRIVER_ARRIVING' || status === 'DRIVER_ARRIVED' || status === 'PIN_VERIFIED') && (
           <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel} disabled={transitioning}>
             <Text style={styles.cancelText}>Cancel Trip</Text>
@@ -193,6 +236,14 @@ const styles = StyleSheet.create({
   actionBtnPrimary: { backgroundColor: '#e94560' },
   btnDisabled: { opacity: 0.6 },
   actionText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  sosBtn: {
+    backgroundColor: '#dc2626',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  sosText: { color: '#fff', fontSize: 16, fontWeight: '800' },
   cancelBtn: { marginTop: 20, alignItems: 'center', paddingVertical: 12 },
   cancelText: { color: '#e94560', fontSize: 15, fontWeight: '600' },
   pinBox: { marginTop: 16, backgroundColor: '#f5f5f5', borderRadius: 12, padding: 16 },

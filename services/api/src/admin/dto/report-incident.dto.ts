@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class ReportIncidentDto {
   @IsString()
@@ -11,5 +11,6 @@ export class ReportIncidentDto {
 
   @IsString()
   @IsOptional()
+  @IsIn(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'])
   severity?: string;
 }
