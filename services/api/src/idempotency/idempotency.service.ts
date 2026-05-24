@@ -80,6 +80,7 @@ export class IdempotencyService {
         reference: input.reference ?? null,
         payloadHash,
         payload: input.payload as any,
+        status: 'PENDING',
       },
     });
   }

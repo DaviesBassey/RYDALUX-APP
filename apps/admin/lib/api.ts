@@ -226,4 +226,20 @@ export const api = {
   getFinanceLedger: (limit = 20, offset = 0) => fetchJson<any>(`/admin/finance/ledger?limit=${limit}&offset=${offset}`),
   getFinanceWallets: (limit = 20, offset = 0) => fetchJson<any>(`/admin/finance/wallets?limit=${limit}&offset=${offset}`),
   getFinanceReconciliation: () => fetchJson<any>('/admin/finance/reconciliation'),
+  runFinanceReconciliation: () => fetchJson<any>('/admin/finance/reconciliation/run', { method: 'POST' }),
+  getFinanceReconciliationMismatches: (limit = 50, offset = 0) => fetchJson<any>(`/admin/finance/reconciliation/mismatches?limit=${limit}&offset=${offset}`),
+  getFinanceProviderEvents: (status = '', limit = 20, offset = 0) =>
+    fetchJson<any>(`/admin/finance/provider-events?${new URLSearchParams({ ...(status ? { status } : {}), limit: String(limit), offset: String(offset) })}`),
+  retryProviderEvent: (id: string) => fetchJson<any>(`/admin/finance/provider-events/${id}/retry`, { method: 'POST' }),
+  deadLetterProviderEvent: (id: string, reason?: string) =>
+    fetchJson<any>(`/admin/finance/provider-events/${id}/dead-letter`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  retryPayout: (id: string, comment?: string) =>
+    fetchJson<any>(`/admin/payouts/${id}/retry`, { method: 'POST', body: JSON.stringify({ comment }) }),
+  getFinanceRefunds: (limit = 20, offset = 0) => fetchJson<any>(`/admin/finance/refunds?limit=${limit}&offset=${offset}`),
+  getFinanceDisputes: (limit = 20, offset = 0) => fetchJson<any>(`/admin/finance/disputes?limit=${limit}&offset=${offset}`),
+  updateFinanceDispute: (id: string, adminStatus?: string, adminNotes?: string) =>
+    fetchJson<any>(`/admin/finance/disputes/${id}`, { method: 'PATCH', body: JSON.stringify({ adminStatus, adminNotes }) }),
+  resolveFinanceDispute: (id: string, resolution: 'WON' | 'LOST' | 'CLOSED', notes?: string) =>
+    fetchJson<any>(`/admin/finance/disputes/${id}/resolve`, { method: 'POST', body: JSON.stringify({ resolution, notes }) }),
+  getFinanceOperations: (limit = 20, offset = 0) => fetchJson<any>(`/admin/finance/operations?limit=${limit}&offset=${offset}`),
 };

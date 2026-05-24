@@ -4,7 +4,15 @@ import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { PaymentsService, decimalToMinorUnits, LEDGER_ACCOUNTS, minorUnitsToDecimal } from './payments.service';
+import {
+  calculateShare,
+  decimalToMinorUnits,
+  DRIVER_EARNINGS_BPS,
+  LEDGER_ACCOUNTS,
+  minorUnitsToDecimal,
+  PaymentsService,
+  PLATFORM_COMMISSION_BPS,
+} from './payments.service';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import { SaveDriverBankAccountDto } from './dto/save-driver-bank-account.dto';
 
@@ -280,29 +288,70 @@ export class PaystackService {
       payload,
     });
 
-    if (providerEvent.processedAt) {
+    if (providerEvent.status === 'DEAD_LETTER' || providerEvent.processedAt) {
       return;
     }
 
-    let processed = true;
-    if (event === 'charge.success') {
-      processed = await this.handleChargeSuccess(data);
-    } else if (event === 'charge.failed') {
-      processed = await this.handleChargeFailed(data);
-    } else if (event === 'transfer.success') {
-      processed = await this.handleTransferSuccess(data);
-    } else if (event === 'transfer.failed') {
-      processed = await this.handleTransferFailed(data);
-    } else if (event === 'refund.pending' || event === 'refund.processed' || event === 'refund.failed') {
-      processed = await this.handleRefundEvent(event, data);
-    } else if (event.startsWith('charge.dispute.')) {
-      processed = await this.handleDisputeEvent(event, data);
-    } else {
-      this.logger.log(`Unhandled Paystack event: ${event}`);
-    }
+    await this.processProviderEvent(providerEvent.id, payload);
+  }
 
-    if (processed) {
-      await this.prisma.providerEvent.update({ where: { id: providerEvent.id }, data: { processedAt: new Date() } });
+  private async processProviderEvent(providerEventId: string, payload: PaystackWebhookPayload) {
+    await this.prisma.providerEvent.update({
+      where: { id: providerEventId },
+      data: {
+        status: 'PENDING',
+        attemptCount: { increment: 1 },
+        lastError: null,
+        nextRetryAt: null,
+        deadLetteredAt: null,
+      },
+    });
+
+    try {
+      const event = payload.event;
+      const data = payload.data;
+
+      let processed = true;
+      if (event === 'charge.success') {
+        processed = await this.handleChargeSuccess(data);
+      } else if (event === 'charge.failed') {
+        processed = await this.handleChargeFailed(data);
+      } else if (event === 'transfer.success') {
+        processed = await this.handleTransferSuccess(data);
+      } else if (event === 'transfer.failed') {
+        processed = await this.handleTransferFailed(data);
+      } else if (event === 'refund.pending' || event === 'refund.processed' || event === 'refund.failed') {
+        processed = await this.handleRefundEvent(event, data);
+      } else if (event.startsWith('charge.dispute.')) {
+        processed = await this.handleDisputeEvent(event, data);
+      } else {
+        this.logger.log(`Unhandled Paystack event: ${event}`);
+      }
+
+      if (!processed) {
+        throw new Error(`Provider event ${event} was not processed.`);
+      }
+
+      await this.prisma.providerEvent.update({
+        where: { id: providerEventId },
+        data: {
+          status: 'PROCESSED',
+          processedAt: new Date(),
+          lastError: null,
+          nextRetryAt: null,
+        },
+      });
+    } catch (error) {
+      const message = (error as Error).message;
+      this.logger.error(`Provider event processing failed: ${message}`);
+      await this.prisma.providerEvent.update({
+        where: { id: providerEventId },
+        data: {
+          status: 'FAILED',
+          lastError: message,
+          nextRetryAt: new Date(Date.now() + 5 * 60 * 1000),
+        },
+      });
     }
   }
 
@@ -484,22 +533,57 @@ export class PaystackService {
 
     const reference = `RYD-TRF-${payout.id}`;
     const amountKobo = Number(decimalToMinorUnits(payout.amount));
+    const operation = await this.prisma.financialOperation.create({
+      data: {
+        operationType: 'TRANSFER_INITIATION',
+        status: 'PROCESSING',
+        provider: 'paystack',
+        providerReference: reference,
+        entityType: 'PAYOUT',
+        entityId: payout.id,
+        requestPayload: { amount: amountKobo, recipient: payout.driverProfile.bankAccount.paystackRecipientCode, comment } as any,
+        attemptCount: 1,
+        lastAttemptAt: new Date(),
+      },
+    });
 
-    const response = await firstValueFrom(
-      this.httpService.post<PaystackTransferResponse>(
-        `${this.baseUrl}/transfer`,
-        {
-          source: 'balance',
-          amount: amountKobo,
-          recipient: payout.driverProfile.bankAccount.paystackRecipientCode,
-          reason: comment ?? `RYDALUX driver payout ${payout.id}`,
-          reference,
+    let response;
+    try {
+      response = await firstValueFrom(
+        this.httpService.post<PaystackTransferResponse>(
+          `${this.baseUrl}/transfer`,
+          {
+            source: 'balance',
+            amount: amountKobo,
+            recipient: payout.driverProfile.bankAccount.paystackRecipientCode,
+            reason: comment ?? `RYDALUX driver payout ${payout.id}`,
+            reference,
+          },
+          { headers: { Authorization: `Bearer ${this.secretKey}` } },
+        ),
+      );
+    } catch (error) {
+      await this.prisma.financialOperation.update({
+        where: { id: operation.id },
+        data: {
+          status: 'FAILED',
+          errorMessage: (error as Error).message,
+          nextRetryAt: new Date(Date.now() + 15 * 60 * 1000),
         },
-        { headers: { Authorization: `Bearer ${this.secretKey}` } },
-      ),
-    );
+      });
+      throw error;
+    }
 
     if (!response.data?.status || !response.data.data?.transfer_code) {
+      await this.prisma.financialOperation.update({
+        where: { id: operation.id },
+        data: {
+          status: 'FAILED',
+          responsePayload: response.data as any,
+          errorMessage: response.data?.message ?? 'Paystack transfer initiation failed',
+          nextRetryAt: new Date(Date.now() + 15 * 60 * 1000),
+        },
+      });
       throw new BadRequestException('Paystack transfer initiation failed: ' + (response.data?.message ?? 'Unknown error'));
     }
 
@@ -526,6 +610,16 @@ export class PaystackService {
           payload: { provider: 'paystack', reference, transferCode: response.data.data!.transfer_code } as any,
         },
       });
+
+      await tx.financialOperation.update({
+        where: { id: operation.id },
+        data: {
+          status: 'SUCCEEDED',
+          providerReference: response.data.data!.transfer_code,
+          responsePayload: response.data as any,
+          completedAt: new Date(),
+        },
+      });
     });
 
     return { success: true, status: 'PROCESSING', transferCode: response.data.data.transfer_code };
@@ -543,23 +637,42 @@ export class PaystackService {
 
     const reference = `RYD-RFD-${payment.id}`;
     const initialStatus = this.secretKey && payment.provider === 'paystack' ? 'PROCESSING' : 'PROCESSED';
-    const refund = await this.prisma.refund.create({
-      data: {
-        paymentId,
-        amount: payment.amount,
-        currency: payment.currency,
-        status: initialStatus,
-        provider: payment.provider,
-        providerReference: reference,
-        reason,
-        requestedById: adminId,
-        metadata: { fullRefund: true } as any,
-        processedAt: initialStatus === 'PROCESSED' ? new Date() : null,
-      },
+    const refund = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.refund.create({
+        data: {
+          paymentId,
+          amount: payment.amount,
+          currency: payment.currency,
+          status: initialStatus,
+          provider: payment.provider,
+          providerReference: reference,
+          reason,
+          requestedById: adminId,
+          metadata: { fullRefund: true } as any,
+          processedAt: initialStatus === 'PROCESSED' ? new Date() : null,
+        },
+      });
+
+      await tx.financialOperation.create({
+        data: {
+          operationType: 'REFUND_INITIATION',
+          status: initialStatus === 'PROCESSED' ? 'SUCCEEDED' : 'PROCESSING',
+          provider: payment.provider,
+          providerReference: reference,
+          entityType: 'REFUND',
+          entityId: created.id,
+          requestPayload: { paymentId, reason, fullRefund: true } as any,
+          attemptCount: 1,
+          lastAttemptAt: new Date(),
+          completedAt: initialStatus === 'PROCESSED' ? new Date() : null,
+        },
+      });
+
+      return created;
     });
 
     if (!this.secretKey || payment.provider !== 'paystack') {
-      await this.prisma.payment.update({ where: { id: payment.id }, data: { status: 'REFUNDED' } });
+      await this.reverseFullRefundLedger(refund.id, 'mock-refund');
       return { refund };
     }
 
@@ -579,6 +692,14 @@ export class PaystackService {
 
     if (!response.data?.status) {
       await this.prisma.refund.update({ where: { id: refund.id }, data: { status: 'FAILED', failedAt: new Date() } });
+      await this.prisma.financialOperation.updateMany({
+        where: { entityType: 'REFUND', entityId: refund.id, operationType: 'REFUND_INITIATION' },
+        data: {
+          status: 'FAILED',
+          errorMessage: response.data?.message ?? 'Paystack refund initiation failed',
+          nextRetryAt: new Date(Date.now() + 15 * 60 * 1000),
+        },
+      });
       throw new BadRequestException('Paystack refund initiation failed: ' + (response.data?.message ?? 'Unknown error'));
     }
 
@@ -588,6 +709,16 @@ export class PaystackService {
         providerRefundId: response.data.data?.id?.toString(),
         providerReference: response.data.data?.reference ?? reference,
         metadata: { fullRefund: true, paystackStatus: response.data.data?.status } as any,
+      },
+    });
+
+    await this.prisma.financialOperation.updateMany({
+      where: { entityType: 'REFUND', entityId: refund.id, operationType: 'REFUND_INITIATION' },
+      data: {
+        status: 'SUCCEEDED',
+        providerReference: updatedRefund.providerReference,
+        responsePayload: response.data as any,
+        completedAt: new Date(),
       },
     });
 
@@ -618,6 +749,523 @@ export class PaystackService {
       this.prisma.dispute.count(),
     ]);
     return { items, total, limit, offset };
+  }
+
+  async listProviderEvents(status?: string, limit = 20, offset = 0) {
+    const where = status ? { status: status as any } : {};
+    const [items, total] = await Promise.all([
+      this.prisma.providerEvent.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: offset,
+        take: limit,
+      }),
+      this.prisma.providerEvent.count({ where }),
+    ]);
+
+    return { items, total, limit, offset };
+  }
+
+  async listFinancialOperations(limit = 20, offset = 0) {
+    const [items, total] = await Promise.all([
+      this.prisma.financialOperation.findMany({
+        orderBy: { createdAt: 'desc' },
+        skip: offset,
+        take: limit,
+      }),
+      this.prisma.financialOperation.count(),
+    ]);
+
+    return { items, total, limit, offset };
+  }
+
+  async retryProviderEvent(eventId: string, adminId: string) {
+    const providerEvent = await this.prisma.providerEvent.findUnique({ where: { id: eventId } });
+    if (!providerEvent) throw new NotFoundException('Provider event not found.');
+    if (providerEvent.status === 'PROCESSED' || providerEvent.processedAt) {
+      return { success: true, status: 'PROCESSED' };
+    }
+    if (!providerEvent.payload) {
+      throw new BadRequestException('Provider event has no payload to retry.');
+    }
+
+    await this.processProviderEvent(providerEvent.id, providerEvent.payload as any);
+    const refreshed = await this.prisma.providerEvent.findUnique({ where: { id: eventId } });
+
+    await this.prisma.auditLog.create({
+      data: {
+        actorId: adminId,
+        action: 'PROVIDER_EVENT_RETRY',
+        entity: 'PROVIDER_EVENT',
+        entityId: eventId,
+        payload: { status: refreshed?.status, eventType: providerEvent.eventType, reference: providerEvent.reference } as any,
+      },
+    });
+
+    return { success: refreshed?.status === 'PROCESSED', status: refreshed?.status };
+  }
+
+  async deadLetterProviderEvent(eventId: string, adminId: string, reason?: string) {
+    const providerEvent = await this.prisma.providerEvent.findUnique({ where: { id: eventId } });
+    if (!providerEvent) throw new NotFoundException('Provider event not found.');
+    if (providerEvent.status === 'PROCESSED' || providerEvent.processedAt) {
+      throw new BadRequestException('Processed provider events cannot be dead-lettered.');
+    }
+
+    const updated = await this.prisma.providerEvent.update({
+      where: { id: eventId },
+      data: {
+        status: 'DEAD_LETTER',
+        lastError: reason ?? providerEvent.lastError ?? 'Marked dead-letter by finance admin.',
+        deadLetteredAt: new Date(),
+        nextRetryAt: null,
+      },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        actorId: adminId,
+        action: 'PROVIDER_EVENT_DEAD_LETTER',
+        entity: 'PROVIDER_EVENT',
+        entityId: eventId,
+        payload: { reason, eventType: providerEvent.eventType, reference: providerEvent.reference } as any,
+      },
+    });
+
+    return { success: true, providerEvent: updated };
+  }
+
+  async retryPayoutTransfer(payoutId: string, adminId: string, comment?: string) {
+    const payout = await this.prisma.payout.findUnique({
+      where: { id: payoutId },
+      include: { driverProfile: { include: { bankAccount: true } } },
+    });
+    if (!payout) throw new NotFoundException('Payout not found.');
+    if (payout.status !== 'FAILED') {
+      throw new BadRequestException('Only failed payouts can be retried.');
+    }
+
+    const paidLedger = await this.prisma.financialTransaction.findUnique({
+      where: { reference: `payout:${payout.id}:paid:wallet` },
+    });
+    if (paidLedger) {
+      throw new BadRequestException('Payout already has paid ledger entries and cannot be retried.');
+    }
+
+    const operation = await this.prisma.financialOperation.create({
+      data: {
+        operationType: 'PAYOUT_RETRY',
+        status: 'PROCESSING',
+        provider: payout.provider,
+        providerReference: payout.providerReference,
+        entityType: 'PAYOUT',
+        entityId: payout.id,
+        requestPayload: { comment, previousTransferCode: payout.providerTransferCode } as any,
+        attemptCount: 1,
+        lastAttemptAt: new Date(),
+      },
+    });
+
+    await this.prisma.payout.update({
+      where: { id: payout.id },
+      data: {
+        status: 'PENDING',
+        providerReference: null,
+        providerTransferId: null,
+        providerTransferCode: null,
+        transferFailureReason: null,
+        transferInitiatedAt: null,
+        failedAt: null,
+        notes: comment,
+      },
+    });
+
+    try {
+      const result = await this.initiatePayoutTransfer(payout.id, adminId, comment);
+      await this.prisma.financialOperation.update({
+        where: { id: operation.id },
+        data: {
+          status: 'SUCCEEDED',
+          responsePayload: result as any,
+          completedAt: new Date(),
+        },
+      });
+
+      await this.prisma.auditLog.create({
+        data: {
+          actorId: adminId,
+          action: 'PAYOUT_RETRY_INITIATED',
+          entity: 'PAYOUT',
+          entityId: payout.id,
+          payload: { operationId: operation.id, result } as any,
+        },
+      });
+
+      return result;
+    } catch (error) {
+      await this.prisma.payout.update({
+        where: { id: payout.id },
+        data: {
+          status: 'FAILED',
+          failedAt: new Date(),
+          transferFailureReason: (error as Error).message,
+        },
+      });
+      await this.prisma.financialOperation.update({
+        where: { id: operation.id },
+        data: {
+          status: 'FAILED',
+          errorMessage: (error as Error).message,
+          nextRetryAt: new Date(Date.now() + 15 * 60 * 1000),
+        },
+      });
+      throw error;
+    }
+  }
+
+  async getReconciliationMismatches(limit = 50, offset = 0) {
+    const staleCutoff = new Date(Date.now() - 30 * 60 * 1000);
+    const [stalePayouts, providerEvents, refunds, paidPayoutsMissingLedger, operations] = await Promise.all([
+      this.prisma.payout.findMany({
+        where: { status: 'PROCESSING', transferInitiatedAt: { lt: staleCutoff } },
+        orderBy: { transferInitiatedAt: 'asc' },
+        take: limit,
+        skip: offset,
+      }),
+      this.prisma.providerEvent.findMany({
+        where: { status: { in: ['PENDING', 'FAILED'] } },
+        orderBy: { createdAt: 'asc' },
+        take: limit,
+        skip: offset,
+      }),
+      this.prisma.refund.findMany({
+        where: { status: 'PROCESSED', ledgerReversedAt: null },
+        include: { payment: true },
+        orderBy: { processedAt: 'asc' },
+        take: limit,
+        skip: offset,
+      }),
+      this.findPaidPayoutsMissingLedger(limit),
+      this.prisma.financialOperation.findMany({
+        where: { status: { in: ['FAILED', 'NEEDS_RECONCILIATION', 'DEAD_LETTER'] } },
+        orderBy: { updatedAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+    ]);
+
+    return {
+      stalePayouts,
+      providerEvents,
+      refunds,
+      paidPayoutsMissingLedger,
+      operations,
+      total:
+        stalePayouts.length +
+        providerEvents.length +
+        refunds.length +
+        paidPayoutsMissingLedger.length +
+        operations.length,
+    };
+  }
+
+  async runManualReconciliation(adminId: string) {
+    const operation = await this.prisma.financialOperation.create({
+      data: {
+        operationType: 'MANUAL_RECONCILIATION',
+        status: 'PROCESSING',
+        provider: 'internal',
+        entityType: 'RECONCILIATION',
+        entityId: `manual:${Date.now()}`,
+        attemptCount: 1,
+        lastAttemptAt: new Date(),
+      },
+    });
+
+    const actions: Array<Record<string, unknown>> = [];
+    try {
+      const refunds = await this.prisma.refund.findMany({
+        where: { status: 'PROCESSED', ledgerReversedAt: null },
+        select: { id: true },
+      });
+
+      for (const refund of refunds) {
+        const result = await this.reverseFullRefundLedger(refund.id, 'manual-reconciliation');
+        actions.push({ type: 'REFUND_REVERSAL', refundId: refund.id, result });
+      }
+
+      const mismatches = await this.getReconciliationMismatches();
+      await this.prisma.financialOperation.update({
+        where: { id: operation.id },
+        data: {
+          status: mismatches.total > 0 ? 'NEEDS_RECONCILIATION' : 'SUCCEEDED',
+          responsePayload: { actions, mismatches } as any,
+          completedAt: new Date(),
+        },
+      });
+
+      await this.prisma.auditLog.create({
+        data: {
+          actorId: adminId,
+          action: 'FINANCE_RECONCILIATION_RUN',
+          entity: 'FINANCIAL_OPERATION',
+          entityId: operation.id,
+          payload: { actionsCount: actions.length, mismatchCount: mismatches.total } as any,
+        },
+      });
+
+      return { success: true, operationId: operation.id, actions, mismatches };
+    } catch (error) {
+      await this.prisma.financialOperation.update({
+        where: { id: operation.id },
+        data: {
+          status: 'FAILED',
+          errorMessage: (error as Error).message,
+          nextRetryAt: new Date(Date.now() + 15 * 60 * 1000),
+        },
+      });
+      throw error;
+    }
+  }
+
+  async updateDisputeAdminState(disputeId: string, adminId: string, adminStatus?: string, adminNotes?: string) {
+    const dispute = await this.prisma.dispute.findUnique({ where: { id: disputeId } });
+    if (!dispute) throw new NotFoundException('Dispute not found.');
+
+    const updated = await this.prisma.dispute.update({
+      where: { id: disputeId },
+      data: { adminStatus, adminNotes },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        actorId: adminId,
+        action: 'DISPUTE_ADMIN_UPDATED',
+        entity: 'DISPUTE',
+        entityId: disputeId,
+        payload: { adminStatus, adminNotes } as any,
+      },
+    });
+
+    return { success: true, dispute: updated };
+  }
+
+  async resolveDispute(disputeId: string, adminId: string, resolution: 'WON' | 'LOST' | 'CLOSED', notes?: string) {
+    const dispute = await this.prisma.dispute.findUnique({ where: { id: disputeId } });
+    if (!dispute) throw new NotFoundException('Dispute not found.');
+
+    const updated = await this.prisma.dispute.update({
+      where: { id: disputeId },
+      data: {
+        status: resolution,
+        adminStatus: resolution,
+        adminNotes: notes ?? dispute.adminNotes,
+        resolvedById: adminId,
+        resolvedAt: new Date(),
+      },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        actorId: adminId,
+        action: 'DISPUTE_RESOLVED',
+        entity: 'DISPUTE',
+        entityId: disputeId,
+        payload: { resolution, notes } as any,
+      },
+    });
+
+    return { success: true, dispute: updated };
+  }
+
+  private async findPaidPayoutsMissingLedger(limit: number) {
+    const paidPayouts = await this.prisma.payout.findMany({
+      where: { status: 'PAID' },
+      orderBy: { processedAt: 'desc' },
+      take: limit,
+    });
+    const missing = [];
+    for (const payout of paidPayouts) {
+      const ledger = await this.prisma.financialTransaction.findUnique({
+        where: { reference: `payout:${payout.id}:paid:wallet` },
+      });
+      if (!ledger) missing.push(payout);
+    }
+    return missing;
+  }
+
+  private async reverseFullRefundLedger(refundId: string, source: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const refund = await tx.refund.findUnique({
+        where: { id: refundId },
+        include: { payment: true },
+      });
+      if (!refund) throw new NotFoundException('Refund not found.');
+      if (refund.status !== 'PROCESSED') {
+        return { reversed: false, reason: 'Refund is not processed.' };
+      }
+      if (refund.ledgerReversedAt) {
+        return { reversed: true, alreadyReversed: true };
+      }
+
+      const refundMinor = decimalToMinorUnits(refund.amount);
+      const paymentMinor = decimalToMinorUnits(refund.payment.amount);
+      if (refundMinor !== paymentMinor) {
+        await tx.financialOperation.create({
+          data: {
+            operationType: 'MANUAL_RECONCILIATION',
+            status: 'NEEDS_RECONCILIATION',
+            provider: refund.provider,
+            providerReference: refund.providerReference,
+            entityType: 'REFUND',
+            entityId: refund.id,
+            errorMessage: 'Partial refund reversal is deferred to Phase 7.7.',
+            requestPayload: { refundAmount: refund.amount, paymentAmount: refund.payment.amount } as any,
+          },
+        });
+        return { reversed: false, reason: 'Partial refund reversal deferred.' };
+      }
+
+      const driverMinor = calculateShare(paymentMinor, DRIVER_EARNINGS_BPS);
+      const commissionMinor = calculateShare(paymentMinor, PLATFORM_COMMISSION_BPS);
+
+      await this.paymentsService.recordAccountEvent(tx, {
+        eventType: 'REFUND_PROCESSED',
+        reference: `refund:${refund.id}:processed`,
+        referenceType: 'REFUND',
+        referenceId: refund.id,
+        paymentId: refund.paymentId,
+        tripId: refund.payment.tripId ?? undefined,
+        currency: refund.currency,
+        amountMinor: paymentMinor,
+        account: LEDGER_ACCOUNTS.CASH_CLEARING,
+        transactionType: 'DEBIT',
+        description: 'Full refund processed',
+        metadata: { source, providerReference: refund.providerReference },
+      });
+
+      await this.paymentsService.recordAccountEvent(tx, {
+        eventType: 'REFUND_COMMISSION_REVERSED',
+        reference: `refund:${refund.id}:commission-reversed`,
+        referenceType: 'REFUND',
+        referenceId: refund.id,
+        paymentId: refund.paymentId,
+        tripId: refund.payment.tripId ?? undefined,
+        currency: refund.currency,
+        amountMinor: commissionMinor,
+        account: LEDGER_ACCOUNTS.COMMISSION_REVENUE,
+        transactionType: 'DEBIT',
+        description: 'Platform commission reversed after full refund',
+        metadata: { source, commissionBps: PLATFORM_COMMISSION_BPS },
+      });
+
+      const driverEarning = await tx.financialTransaction.findFirst({
+        where: {
+          paymentId: refund.paymentId,
+          eventType: 'DRIVER_EARNING_RECORDED',
+          reference: { endsWith: ':driver-earning' },
+        },
+      });
+
+      if (driverEarning) {
+        const payoutPending = await tx.financialTransaction.findFirst({
+          where: { paymentId: refund.paymentId, eventType: 'DRIVER_PAYOUT_PENDING' },
+          select: { payoutId: true },
+        });
+        const payout = payoutPending?.payoutId
+          ? await tx.payout.findUnique({ where: { id: payoutPending.payoutId }, include: { driverProfile: { select: { userId: true } } } })
+          : null;
+
+        if (payout?.status === 'PAID' || payout?.status === 'PROCESSING') {
+          await tx.financialOperation.create({
+            data: {
+              operationType: 'MANUAL_RECONCILIATION',
+              status: 'NEEDS_RECONCILIATION',
+              provider: refund.provider,
+              providerReference: refund.providerReference,
+              entityType: 'REFUND',
+              entityId: refund.id,
+              errorMessage: `Driver earning reversal blocked because payout is ${payout.status}.`,
+              requestPayload: { payoutId: payout.id, payoutStatus: payout.status } as any,
+            },
+          });
+        } else if (payout?.driverProfile?.userId) {
+          const wallet = await tx.wallet.findUnique({ where: { userId: payout.driverProfile.userId } });
+          const balanceMinor = wallet ? decimalToMinorUnits(wallet.balance) : 0n;
+          if (balanceMinor >= driverMinor) {
+            await this.paymentsService.recordWalletEvent(tx, {
+              eventType: 'REFUND_DRIVER_EARNING_REVERSED',
+              reference: `refund:${refund.id}:driver-earning-reversed:wallet`,
+              referenceType: 'REFUND',
+              referenceId: refund.id,
+              paymentId: refund.paymentId,
+              payoutId: payout.id,
+              tripId: refund.payment.tripId ?? undefined,
+              userId: payout.driverProfile.userId,
+              currency: refund.currency,
+              amountMinor: driverMinor,
+              transactionType: 'DEBIT',
+              description: 'Driver earning reversed after full refund',
+              metadata: { source, payoutStatus: payout.status },
+            });
+
+            await this.paymentsService.recordAccountEvent(tx, {
+              eventType: 'REFUND_DRIVER_EARNING_REVERSED',
+              reference: `refund:${refund.id}:driver-earning-reversed:driver-payable`,
+              referenceType: 'REFUND',
+              referenceId: refund.id,
+              paymentId: refund.paymentId,
+              payoutId: payout.id,
+              tripId: refund.payment.tripId ?? undefined,
+              currency: refund.currency,
+              amountMinor: driverMinor,
+              account: LEDGER_ACCOUNTS.DRIVER_PAYABLE,
+              transactionType: 'DEBIT',
+              description: 'Driver payable reversed after full refund',
+              metadata: { source, payoutStatus: payout.status },
+            });
+
+            if (payout.status === 'PENDING' || payout.status === 'FAILED') {
+              await tx.payout.update({
+                where: { id: payout.id },
+                data: { status: 'CANCELLED', notes: 'Cancelled after full payment refund.' },
+              });
+            }
+          } else {
+            await tx.financialOperation.create({
+              data: {
+                operationType: 'MANUAL_RECONCILIATION',
+                status: 'NEEDS_RECONCILIATION',
+                provider: refund.provider,
+                providerReference: refund.providerReference,
+                entityType: 'REFUND',
+                entityId: refund.id,
+                errorMessage: 'Driver wallet has insufficient balance for safe earning reversal.',
+                requestPayload: { driverUserId: payout.driverProfile.userId, driverEarning: minorUnitsToDecimal(driverMinor) } as any,
+              },
+            });
+          }
+        }
+      }
+
+      await tx.refund.update({
+        where: { id: refund.id },
+        data: { ledgerReversedAt: new Date() },
+      });
+      await tx.payment.update({ where: { id: refund.paymentId }, data: { status: 'REFUNDED' } });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: refund.requestedById,
+          action: 'REFUND_LEDGER_REVERSED',
+          entity: 'REFUND',
+          entityId: refund.id,
+          payload: { source, paymentId: refund.paymentId } as any,
+        },
+      });
+
+      return { reversed: true };
+    });
   }
 
   private async createTransferRecipient(payload: SaveDriverBankAccountDto) {
@@ -744,6 +1392,10 @@ export class PaystackService {
         await tx.payment.update({ where: { id: refund.paymentId }, data: { status: 'REFUNDED' } });
       }
     });
+
+    if (status === 'PROCESSED') {
+      await this.reverseFullRefundLedger(refund.id, 'paystack-refund-webhook');
+    }
 
     return true;
   }

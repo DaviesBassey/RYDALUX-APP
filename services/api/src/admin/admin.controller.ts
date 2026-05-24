@@ -17,6 +17,9 @@ import { ReviewDriverDocumentDto } from '../drivers/dto/review-driver-document.d
 import { ReviewVehicleDto } from './dto/review-vehicle.dto';
 import { IdempotencyService } from '../idempotency/idempotency.service';
 import { RequestRefundDto } from './dto/request-refund.dto';
+import { RetryPayoutDto } from './dto/retry-payout.dto';
+import { DeadLetterProviderEventDto } from './dto/dead-letter-provider-event.dto';
+import { ResolveDisputeDto, UpdateDisputeAdminDto } from './dto/update-dispute-admin.dto';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, AdminOnlyGuard, PermissionsGuard)
@@ -48,6 +51,21 @@ export class AdminController {
       body,
       ttlMs: 7 * 24 * 60 * 60 * 1000,
     }, () => this.adminService.approvePayout(user.userId, body.payoutId, body.comment));
+  }
+
+  @Post('payouts/:id/retry')
+  @Permissions('FINANCE_MANAGER')
+  retryPayout(@Req() req: Request, @Param('id') id: string, @Body() body: RetryPayoutDto, @Headers('idempotency-key') idempotencyKey?: string) {
+    const user = req.user as any;
+    return this.idempotencyService.run({
+      key: idempotencyKey,
+      scope: 'admin:payouts:retry',
+      method: req.method,
+      endpoint: req.route?.path ?? '/admin/payouts/:id/retry',
+      actorId: user.userId,
+      body: { id, ...body },
+      ttlMs: 7 * 24 * 60 * 60 * 1000,
+    }, () => this.paystackService.retryPayoutTransfer(id, user.userId, body.comment));
   }
 
   @Post('operations/dispatch')
@@ -182,6 +200,61 @@ export class AdminController {
     return this.paymentsService.getFinanceReconciliation();
   }
 
+  @Post('finance/reconciliation/run')
+  @Permissions('FINANCE_MANAGER')
+  runFinanceReconciliation(@Req() req: Request, @Headers('idempotency-key') idempotencyKey?: string) {
+    const user = req.user as any;
+    return this.idempotencyService.run({
+      key: idempotencyKey,
+      scope: 'admin:finance:reconciliation:run',
+      method: req.method,
+      endpoint: req.route?.path ?? '/admin/finance/reconciliation/run',
+      actorId: user.userId,
+      body: {},
+      ttlMs: 60 * 60 * 1000,
+    }, () => this.paystackService.runManualReconciliation(user.userId));
+  }
+
+  @Get('finance/reconciliation/mismatches')
+  @Permissions('FINANCE_MANAGER')
+  getFinanceReconciliationMismatches(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.paystackService.getReconciliationMismatches(Number(limit) || 50, Number(offset) || 0);
+  }
+
+  @Get('finance/provider-events')
+  @Permissions('FINANCE_MANAGER')
+  listProviderEvents(@Query('status') status?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.paystackService.listProviderEvents(status, Number(limit) || 20, Number(offset) || 0);
+  }
+
+  @Get('finance/operations')
+  @Permissions('FINANCE_MANAGER')
+  listFinancialOperations(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.paystackService.listFinancialOperations(Number(limit) || 20, Number(offset) || 0);
+  }
+
+  @Post('finance/provider-events/:id/retry')
+  @Permissions('FINANCE_MANAGER')
+  retryProviderEvent(@Req() req: Request, @Param('id') id: string, @Headers('idempotency-key') idempotencyKey?: string) {
+    const user = req.user as any;
+    return this.idempotencyService.run({
+      key: idempotencyKey,
+      scope: 'admin:finance:provider-events:retry',
+      method: req.method,
+      endpoint: req.route?.path ?? '/admin/finance/provider-events/:id/retry',
+      actorId: user.userId,
+      body: { id },
+      ttlMs: 60 * 60 * 1000,
+    }, () => this.paystackService.retryProviderEvent(id, user.userId));
+  }
+
+  @Post('finance/provider-events/:id/dead-letter')
+  @Permissions('FINANCE_MANAGER')
+  deadLetterProviderEvent(@Req() req: Request, @Param('id') id: string, @Body() body: DeadLetterProviderEventDto) {
+    const user = req.user as any;
+    return this.paystackService.deadLetterProviderEvent(id, user.userId, body.reason);
+  }
+
   @Post('finance/refunds')
   @Permissions('FINANCE_MANAGER')
   requestRefund(@Req() req: Request, @Body() body: RequestRefundDto, @Headers('idempotency-key') idempotencyKey?: string) {
@@ -207,5 +280,19 @@ export class AdminController {
   @Permissions('FINANCE_MANAGER')
   listDisputes(@Query('limit') limit?: string, @Query('offset') offset?: string) {
     return this.paystackService.listDisputes(Number(limit) || 20, Number(offset) || 0);
+  }
+
+  @Patch('finance/disputes/:id')
+  @Permissions('FINANCE_MANAGER')
+  updateDisputeAdminState(@Req() req: Request, @Param('id') id: string, @Body() body: UpdateDisputeAdminDto) {
+    const user = req.user as any;
+    return this.paystackService.updateDisputeAdminState(id, user.userId, body.adminStatus, body.adminNotes);
+  }
+
+  @Post('finance/disputes/:id/resolve')
+  @Permissions('FINANCE_MANAGER')
+  resolveDispute(@Req() req: Request, @Param('id') id: string, @Body() body: ResolveDisputeDto) {
+    const user = req.user as any;
+    return this.paystackService.resolveDispute(id, user.userId, body.resolution, body.notes);
   }
 }

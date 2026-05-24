@@ -10,6 +10,12 @@ export default function FinancePage() {
   const [ledger, setLedger] = useState<any>(null);
   const [wallets, setWallets] = useState<any>(null);
   const [reconciliation, setReconciliation] = useState<any>(null);
+  const [mismatches, setMismatches] = useState<any>(null);
+  const [providerEvents, setProviderEvents] = useState<any>(null);
+  const [refunds, setRefunds] = useState<any>(null);
+  const [disputes, setDisputes] = useState<any>(null);
+  const [operations, setOperations] = useState<any>(null);
+  const [actionMessage, setActionMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -17,13 +23,18 @@ export default function FinancePage() {
     setLoading(true);
     setError('');
     try {
-      const [sum, pay, po, led, wal, rec] = await Promise.all([
+      const [sum, pay, po, led, wal, rec, mm, events, rfd, dsp, ops] = await Promise.all([
         api.getFinanceSummary(),
         api.getFinancePayments(10, 0),
         api.getFinancePayouts(10, 0),
         api.getFinanceLedger(10, 0),
         api.getFinanceWallets(10, 0),
         api.getFinanceReconciliation(),
+        api.getFinanceReconciliationMismatches(20, 0),
+        api.getFinanceProviderEvents('FAILED', 10, 0),
+        api.getFinanceRefunds(10, 0),
+        api.getFinanceDisputes(10, 0),
+        api.getFinanceOperations(10, 0),
       ]);
       setSummary(sum);
       setPayments(pay);
@@ -31,6 +42,11 @@ export default function FinancePage() {
       setLedger(led);
       setWallets(wal);
       setReconciliation(rec);
+      setMismatches(mm);
+      setProviderEvents(events);
+      setRefunds(rfd);
+      setDisputes(dsp);
+      setOperations(ops);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -41,6 +57,51 @@ export default function FinancePage() {
   useEffect(() => {
     load();
   }, []);
+
+  async function runReconciliation() {
+    setActionMessage('');
+    setError('');
+    try {
+      const result = await api.runFinanceReconciliation();
+      setActionMessage(`Reconciliation complete. Mismatches: ${result.mismatches?.total ?? 0}`);
+      await load();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
+
+  async function retryProviderEvent(id: string) {
+    setActionMessage('');
+    try {
+      const result = await api.retryProviderEvent(id);
+      setActionMessage(`Provider event retry finished: ${result.status ?? 'UNKNOWN'}`);
+      await load();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
+
+  async function deadLetterProviderEvent(id: string) {
+    setActionMessage('');
+    try {
+      await api.deadLetterProviderEvent(id, 'Dead-lettered from finance dashboard');
+      setActionMessage('Provider event moved to dead letter.');
+      await load();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
+
+  async function retryPayout(id: string) {
+    setActionMessage('');
+    try {
+      await api.retryPayout(id, 'Retried from finance dashboard');
+      setActionMessage('Payout retry initiated.');
+      await load();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
 
   const cardStyle: React.CSSProperties = {
     background: '#fff',
@@ -71,6 +132,7 @@ export default function FinancePage() {
     <div>
       <h1 style={{ margin: '0 0 24px', fontSize: 28, fontWeight: 700 }}>Finance Dashboard</h1>
       {error && <div style={{ marginBottom: 16, padding: 12, background: '#fee2e2', color: '#b91c1c', borderRadius: 8 }}>{error}</div>}
+      {actionMessage && <div style={{ marginBottom: 16, padding: 12, background: '#dcfce7', color: '#166534', borderRadius: 8 }}>{actionMessage}</div>}
       {loading ? (
         <div style={{ color: '#6b7280' }}>Loading…</div>
       ) : (
@@ -115,7 +177,12 @@ export default function FinancePage() {
           {/* Reconciliation */}
           {reconciliation && (
             <div style={cardStyle}>
-              <h2 style={sectionTitle}>Reconciliation</h2>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 16 }}>
+                <h2 style={{ ...sectionTitle, margin: 0 }}>Reconciliation</h2>
+                <button onClick={runReconciliation} style={{ border: 'none', borderRadius: 8, background: '#111827', color: '#f9d36a', padding: '10px 14px', fontWeight: 700, cursor: 'pointer' }}>
+                  Run Reconciliation
+                </button>
+              </div>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
                 <span style={{
                   padding: '4px 12px',
@@ -136,7 +203,55 @@ export default function FinancePage() {
                 <div><div style={{ fontSize: 20, fontWeight: 700 }}>{reconciliation.unprocessedProviderEvents}</div><div style={{ fontSize: 12, color: '#6b7280' }}>Unprocessed</div></div>
                 <div><div style={{ fontSize: 20, fontWeight: 700 }}>{reconciliation.failedPayments}</div><div style={{ fontSize: 12, color: '#6b7280' }}>Failed Payments</div></div>
                 <div><div style={{ fontSize: 20, fontWeight: 700 }}>{reconciliation.pendingPayouts}</div><div style={{ fontSize: 12, color: '#6b7280' }}>Pending Payouts</div></div>
+                <div><div style={{ fontSize: 20, fontWeight: 700 }}>{reconciliation.failedProviderEvents ?? 0}</div><div style={{ fontSize: 12, color: '#6b7280' }}>Failed Events</div></div>
+                <div><div style={{ fontSize: 20, fontWeight: 700 }}>{reconciliation.unreversedRefunds ?? 0}</div><div style={{ fontSize: 12, color: '#6b7280' }}>Unreversed Refunds</div></div>
               </div>
+            </div>
+          )}
+
+          {mismatches && (
+            <div style={cardStyle}>
+              <h2 style={sectionTitle}>Mismatch Report ({mismatches.total ?? 0})</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12 }}>
+                <div><div style={{ fontSize: 20, fontWeight: 700 }}>{mismatches.stalePayouts?.length ?? 0}</div><div style={labelStyle}>Stale Processing Payouts</div></div>
+                <div><div style={{ fontSize: 20, fontWeight: 700 }}>{mismatches.providerEvents?.length ?? 0}</div><div style={labelStyle}>Provider Events</div></div>
+                <div><div style={{ fontSize: 20, fontWeight: 700 }}>{mismatches.refunds?.length ?? 0}</div><div style={labelStyle}>Refund Reversals</div></div>
+                <div><div style={{ fontSize: 20, fontWeight: 700 }}>{mismatches.paidPayoutsMissingLedger?.length ?? 0}</div><div style={labelStyle}>Payout Ledger Gaps</div></div>
+                <div><div style={{ fontSize: 20, fontWeight: 700 }}>{mismatches.operations?.length ?? 0}</div><div style={labelStyle}>Operations</div></div>
+              </div>
+            </div>
+          )}
+
+          {providerEvents && (
+            <div style={cardStyle}>
+              <h2 style={sectionTitle}>Failed Provider Events ({providerEvents.total})</h2>
+              {providerEvents.items.length === 0 ? (
+                <div style={{ color: '#6b7280' }}>No failed provider events.</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                  <thead>
+                    <tr style={{ background: '#f9fafb' }}>
+                      <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>Event</th>
+                      <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>Attempts</th>
+                      <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>Error</th>
+                      <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {providerEvents.items.map((event: any) => (
+                      <tr key={event.id}>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>{event.eventType}</td>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>{event.attemptCount}</td>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e7eb', color: '#6b7280' }}>{event.lastError ?? '—'}</td>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>
+                          <button onClick={() => retryProviderEvent(event.id)} style={{ marginRight: 8, border: '1px solid #111827', borderRadius: 6, background: '#fff', padding: '6px 10px', cursor: 'pointer' }}>Retry</button>
+                          <button onClick={() => deadLetterProviderEvent(event.id)} style={{ border: '1px solid #b91c1c', color: '#b91c1c', borderRadius: 6, background: '#fff', padding: '6px 10px', cursor: 'pointer' }}>Dead-letter</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           )}
 
@@ -204,6 +319,7 @@ export default function FinancePage() {
                       <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>Driver</th>
                       <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>Amount</th>
                       <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>Status</th>
+                      <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -219,6 +335,101 @@ export default function FinancePage() {
                             {p.status}
                           </span>
                         </td>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>
+                          {p.status === 'FAILED' ? (
+                            <button onClick={() => retryPayout(p.id)} style={{ border: '1px solid #111827', borderRadius: 6, background: '#fff', padding: '6px 10px', cursor: 'pointer' }}>Retry</button>
+                          ) : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          {refunds && (
+            <div style={cardStyle}>
+              <h2 style={sectionTitle}>Refunds ({refunds.total})</h2>
+              {refunds.items.length === 0 ? (
+                <div style={{ color: '#6b7280' }}>No refunds.</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                  <thead>
+                    <tr style={{ background: '#f9fafb' }}>
+                      <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>Reference</th>
+                      <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>Amount</th>
+                      <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>Status</th>
+                      <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>Ledger</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {refunds.items.map((refund: any) => (
+                      <tr key={refund.id}>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>{refund.providerReference ?? refund.id}</td>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>₦{parseFloat(refund.amount).toLocaleString()}</td>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>{refund.status}</td>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>{refund.ledgerReversedAt ? 'Reversed' : 'Pending'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          {disputes && (
+            <div style={cardStyle}>
+              <h2 style={sectionTitle}>Disputes ({disputes.total})</h2>
+              {disputes.items.length === 0 ? (
+                <div style={{ color: '#6b7280' }}>No disputes.</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                  <thead>
+                    <tr style={{ background: '#f9fafb' }}>
+                      <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>Reference</th>
+                      <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>Status</th>
+                      <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>Admin</th>
+                      <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {disputes.items.map((dispute: any) => (
+                      <tr key={dispute.id}>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>{dispute.reference ?? dispute.providerDisputeId}</td>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>{dispute.status}</td>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>{dispute.adminStatus ?? '—'}</td>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e7eb', color: '#6b7280' }}>{dispute.reason ?? dispute.adminNotes ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          {operations && (
+            <div style={cardStyle}>
+              <h2 style={sectionTitle}>Financial Operations ({operations.total})</h2>
+              {operations.items.length === 0 ? (
+                <div style={{ color: '#6b7280' }}>No operations.</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                  <thead>
+                    <tr style={{ background: '#f9fafb' }}>
+                      <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>Type</th>
+                      <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>Entity</th>
+                      <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>Status</th>
+                      <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>Error</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {operations.items.map((operation: any) => (
+                      <tr key={operation.id}>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>{operation.operationType}</td>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>{operation.entityType}</td>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>{operation.status}</td>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e7eb', color: '#6b7280' }}>{operation.errorMessage ?? '—'}</td>
                       </tr>
                     ))}
                   </tbody>

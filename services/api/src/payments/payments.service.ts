@@ -39,6 +39,11 @@ export type LedgerEventType =
   | 'DRIVER_PAYOUT_PENDING'
   | 'DRIVER_PAYOUT_PAID'
   | 'REFUND_PENDING'
+  | 'REFUND_PROCESSED'
+  | 'REFUND_COMMISSION_REVERSED'
+  | 'REFUND_DRIVER_EARNING_REVERSED'
+  | 'PAYOUT_RETRY_INITIATED'
+  | 'RECONCILIATION_ADJUSTMENT'
   | 'ADJUSTMENT';
 
 export function decimalToMinorUnits(value: { toString(): string }): bigint {
@@ -623,23 +628,42 @@ export class PaymentsService {
   }
 
   async getFinanceReconciliation() {
-    const [ledgerTransactions, ledgerEntries, providerEvents, unprocessedProviderEvents, failedPayments, pendingPayouts] = await Promise.all([
-      this.prisma.financialTransaction.count(),
-      this.prisma.ledgerEntry.count(),
-      this.prisma.providerEvent.count(),
-      this.prisma.providerEvent.count({ where: { processedAt: null } }),
-      this.prisma.payment.count({ where: { status: 'FAILED' } }),
-      this.prisma.payout.count({ where: { status: { in: ['PENDING', 'PROCESSING'] } } }),
-    ]);
-
-    return {
-      status: failedPayments === 0 && unprocessedProviderEvents === 0 ? 'CLEAR' : 'REVIEW_REQUIRED',
+    const [
       ledgerTransactions,
       ledgerEntries,
       providerEvents,
       unprocessedProviderEvents,
+      failedProviderEvents,
+      deadLetterProviderEvents,
       failedPayments,
       pendingPayouts,
+      failedPayouts,
+      unreversedRefunds,
+    ] = await Promise.all([
+      this.prisma.financialTransaction.count(),
+      this.prisma.ledgerEntry.count(),
+      this.prisma.providerEvent.count(),
+      this.prisma.providerEvent.count({ where: { processedAt: null } }),
+      this.prisma.providerEvent.count({ where: { status: 'FAILED' } }),
+      this.prisma.providerEvent.count({ where: { status: 'DEAD_LETTER' } }),
+      this.prisma.payment.count({ where: { status: 'FAILED' } }),
+      this.prisma.payout.count({ where: { status: { in: ['PENDING', 'PROCESSING'] } } }),
+      this.prisma.payout.count({ where: { status: 'FAILED' } }),
+      this.prisma.refund.count({ where: { status: 'PROCESSED', ledgerReversedAt: null } }),
+    ]);
+
+    return {
+      status: failedPayments === 0 && failedProviderEvents === 0 && deadLetterProviderEvents === 0 && unreversedRefunds === 0 ? 'CLEAR' : 'REVIEW_REQUIRED',
+      ledgerTransactions,
+      ledgerEntries,
+      providerEvents,
+      unprocessedProviderEvents,
+      failedProviderEvents,
+      deadLetterProviderEvents,
+      failedPayments,
+      pendingPayouts,
+      failedPayouts,
+      unreversedRefunds,
       paystackMode: 'NOT_CONFIGURED',
     };
   }
