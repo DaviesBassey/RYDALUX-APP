@@ -2,11 +2,11 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-const DRIVER_EARNINGS_BPS = 8000; // driver receives 80%, platform retains 20%
-const PLATFORM_COMMISSION_BPS = 2000;
-const BPS_DENOMINATOR = 10000;
+export const DRIVER_EARNINGS_BPS = 8000; // driver receives 80%, platform retains 20%
+export const PLATFORM_COMMISSION_BPS = 2000;
+export const BPS_DENOMINATOR = 10000;
 
-const LEDGER_ACCOUNTS = {
+export const LEDGER_ACCOUNTS = {
   CASH_CLEARING: {
     code: 'platform:cash_clearing:NGN',
     name: 'Platform cash clearing',
@@ -29,8 +29,8 @@ const LEDGER_ACCOUNTS = {
   },
 } as const;
 
-type FinancialTx = Prisma.TransactionClient;
-type LedgerEventType =
+export type FinancialTx = Prisma.TransactionClient;
+export type LedgerEventType =
   | 'RIDER_PAYMENT_PENDING'
   | 'RIDER_PAYMENT_AUTHORIZED'
   | 'RIDER_PAYMENT_CAPTURED'
@@ -41,13 +41,13 @@ type LedgerEventType =
   | 'REFUND_PENDING'
   | 'ADJUSTMENT';
 
-function decimalToMinorUnits(value: { toString(): string }): bigint {
+export function decimalToMinorUnits(value: { toString(): string }): bigint {
   const [wholePart, fractionPart = ''] = value.toString().split('.');
   const normalizedFraction = `${fractionPart}00`.slice(0, 2);
   return BigInt(wholePart) * 100n + BigInt(normalizedFraction);
 }
 
-function minorUnitsToDecimal(units: bigint): string {
+export function minorUnitsToDecimal(units: bigint): string {
   const sign = units < 0n ? '-' : '';
   const absolute = units < 0n ? -units : units;
   const whole = absolute / 100n;
@@ -55,11 +55,11 @@ function minorUnitsToDecimal(units: bigint): string {
   return `${sign}${whole}.${fraction}`;
 }
 
-function minorUnitsToNumber(units: bigint): number {
+export function minorUnitsToNumber(units: bigint): number {
   return Number(minorUnitsToDecimal(units));
 }
 
-function calculateShare(amountMinor: bigint, basisPoints: number): bigint {
+export function calculateShare(amountMinor: bigint, basisPoints: number): bigint {
   return (amountMinor * BigInt(basisPoints)) / BigInt(BPS_DENOMINATOR);
 }
 
@@ -208,6 +208,11 @@ export class PaymentsService {
       if (!payment) return;
       if (payment.status === 'CAPTURED') return;
       if (payment.status !== 'PENDING' && payment.status !== 'AUTHORIZED') return;
+
+      // Gate Paystack payments on external confirmation before capturing ledger
+      if (payment.provider === 'paystack' && !payment.externalId) {
+        return;
+      }
 
       const captured = await tx.payment.updateMany({
         where: { id: payment.id, status: { in: ['PENDING', 'AUTHORIZED'] } },
@@ -660,7 +665,7 @@ export class PaymentsService {
     return minorUnitsToDecimal(transactionType === 'DEBIT' ? -amountMinor : amountMinor);
   }
 
-  private async recordAccountEvent(
+  async recordAccountEvent(
     tx: FinancialTx,
     input: {
       eventType: LedgerEventType;
@@ -720,7 +725,7 @@ export class PaymentsService {
     return financialTransaction;
   }
 
-  private async recordWalletEvent(
+  async recordWalletEvent(
     tx: FinancialTx,
     input: {
       eventType: LedgerEventType;
