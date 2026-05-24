@@ -23,6 +23,11 @@ export class AdminService {
   }
 
   async approvePayout(approverId: string, payoutId: string, comment?: string) {
+    const payout = await this.prisma.payout.findUnique({ where: { id: payoutId } });
+    if (!payout) throw new NotFoundException('Payout not found.');
+    if (payout.status === 'PAID') throw new BadRequestException('Payout has already been paid.');
+    if (payout.status === 'FAILED') throw new BadRequestException('Payout has failed and cannot be approved.');
+
     await this.prisma.payout.update({
       where: { id: payoutId },
       data: {
@@ -32,7 +37,7 @@ export class AdminService {
       }
     });
 
-    await this.logAdminAction(approverId, 'PAYOUT_APPROVE', payoutId, { comment });
+    await this.logAdminAction(approverId, 'PAYOUT_APPROVE', payoutId, { comment, previousStatus: payout.status });
     return { success: true };
   }
 
