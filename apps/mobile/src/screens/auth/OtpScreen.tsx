@@ -14,6 +14,7 @@ import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-naviga
 import { useNavigation } from '@react-navigation/native';
 import { verifyOtp } from '../../api/auth';
 import { getRiderProfile } from '../../api/rider';
+import { getOnboardingStatus } from '../../api/driver';
 import { saveTokens } from '../../store/authStore';
 import { useAuth } from '../../context/AuthContext';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
@@ -22,19 +23,16 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Otp'>;
 type Nav = NativeStackNavigationProp<AuthStackParamList, 'Otp'>;
 
 export default function OtpScreen({ route }: Props) {
-  const { phone, devCode } = route.params;
+  const { phone, devCode, intent } = route.params;
   const navigation = useNavigation<Nav>();
   const { login } = useAuth();
 
-  // In dev, the backend returns devCode — auto-fill it so testers don't need SMS
   const [code, setCode] = useState(devCode ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (devCode) {
-      setCode(devCode);
-    }
+    if (devCode) setCode(devCode);
   }, [devCode]);
 
   async function handleVerify() {
@@ -45,20 +43,31 @@ export default function OtpScreen({ route }: Props) {
     setError('');
     setLoading(true);
     try {
-      const tokens = await verifyOtp(phone, code.trim());
-      await saveTokens(tokens);
+      const tokens = await verifyOtp(phone, code.trim(), intent);
+      await saveTokens({ ...tokens, userType: tokens.userType });
 
-      // Check whether rider profile already exists
-      try {
-        const profile = await getRiderProfile();
-        if (profile.riderProfile) {
-          login();
-        } else {
-          // User record exists but RiderProfile not created yet — collect name
+      if (intent === 'DRIVER') {
+        try {
+          const status = await getOnboardingStatus();
+          if (status.profileExists) {
+            login();
+          } else {
+            navigation.navigate('DriverSetup', { phone });
+          }
+        } catch {
+          navigation.navigate('DriverSetup', { phone });
+        }
+      } else {
+        try {
+          const profile = await getRiderProfile();
+          if (profile.riderProfile) {
+            login();
+          } else {
+            navigation.navigate('ProfileSetup', { phone });
+          }
+        } catch {
           navigation.navigate('ProfileSetup', { phone });
         }
-      } catch {
-        navigation.navigate('ProfileSetup', { phone });
       }
     } catch (e: any) {
       setError(e?.response?.data?.error?.message ?? e?.response?.data?.message ?? 'Invalid code. Please try again.');
@@ -82,7 +91,7 @@ export default function OtpScreen({ route }: Props) {
 
           {devCode ? (
             <View style={styles.devBanner}>
-              <Text style={styles.devText}>🛠 Dev mode — code auto-filled: {devCode}</Text>
+              <Text style={styles.devText}>Dev mode — code auto-filled: {devCode}</Text>
             </View>
           ) : null}
 

@@ -4,21 +4,27 @@ const KEYS = {
   ACCESS_TOKEN: 'auth.accessToken',
   REFRESH_TOKEN: 'auth.refreshToken',
   FINGERPRINT: 'auth.fingerprint',
+  USER_TYPE: 'auth.userType',
 } as const;
+
+export type UserType = 'RIDER' | 'DRIVER';
 
 export type StoredTokens = {
   accessToken: string;
   refreshToken: string;
+  userType: UserType;
 };
 
 export async function getTokens(): Promise<Partial<StoredTokens>> {
-  const [accessToken, refreshToken] = await Promise.all([
+  const [accessToken, refreshToken, userType] = await Promise.all([
     AsyncStorage.getItem(KEYS.ACCESS_TOKEN),
     AsyncStorage.getItem(KEYS.REFRESH_TOKEN),
+    AsyncStorage.getItem(KEYS.USER_TYPE),
   ]);
   return {
     accessToken: accessToken ?? undefined,
     refreshToken: refreshToken ?? undefined,
+    userType: (userType as UserType) ?? undefined,
   };
 }
 
@@ -26,6 +32,7 @@ export async function saveTokens(tokens: StoredTokens): Promise<void> {
   await Promise.all([
     AsyncStorage.setItem(KEYS.ACCESS_TOKEN, tokens.accessToken),
     AsyncStorage.setItem(KEYS.REFRESH_TOKEN, tokens.refreshToken),
+    AsyncStorage.setItem(KEYS.USER_TYPE, tokens.userType),
   ]);
 }
 
@@ -33,6 +40,7 @@ export async function clearTokens(): Promise<void> {
   await Promise.all([
     AsyncStorage.removeItem(KEYS.ACCESS_TOKEN),
     AsyncStorage.removeItem(KEYS.REFRESH_TOKEN),
+    AsyncStorage.removeItem(KEYS.USER_TYPE),
   ]);
 }
 

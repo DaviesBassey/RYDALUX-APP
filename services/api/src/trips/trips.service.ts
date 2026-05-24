@@ -152,8 +152,15 @@ export class TripsService {
       throw new ForbiddenException('Driver must verify PIN before starting the trip');
     }
 
+    const now = new Date();
+    const timestampData: Record<string, Date> = {};
+    if (nextState === 'DRIVER_ARRIVED') timestampData.arrivedAt = now;
+    if (nextState === 'IN_PROGRESS') timestampData.startedAt = now;
+    if (nextState === 'COMPLETED') timestampData.completedAt = now;
+    if (nextState === 'CANCELLED_BY_RIDER' || nextState === 'CANCELLED_BY_DRIVER') timestampData.cancelledAt = now;
+
     const updated = await this.prisma.$transaction(async (tx: any) => {
-      const t = await tx.trip.update({ where: { id: tripId }, data: { status: nextState as any } });
+      const t = await tx.trip.update({ where: { id: tripId }, data: { status: nextState as any, ...timestampData } });
 
       await tx.tripEvent.create({
         data: {
@@ -481,6 +488,148 @@ export class TripsService {
 
     const trip = await this.prisma.trip.findFirst({
       where: { riderProfileId: riderProfile.id, status: { in: NON_TERMINAL_TRIP_STATUSES } },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        riderProfile: { include: { user: { select: { id: true, displayName: true, phone: true } } } },
+        driverProfile: { include: { user: { select: { id: true, displayName: true, phone: true } } } },
+        vehicle: { select: { id: true, registrationNumber: true, vehicleType: true, make: true, model: true, color: true, year: true } },
+        fareQuote: { select: { id: true, totalFare: true, baseFare: true, distanceFare: true, timeFare: true, bookingFee: true, surgeFactor: true, serviceType: true, expiresAt: true } },
+        payment: { select: { id: true, amount: true, currency: true, status: true } }
+      }
+    });
+
+    return { trip: trip ? this.shapeTripResponse(trip) : null };
+  }
+
+  async getAvailableTrips(userId: string) {
+    const driverProfile = await this.prisma.driverProfile.findUnique({
+      where: { userId },
+      select: { id: true }
+    });
+    if (!driverProfile) throw new ForbiddenException('Driver profile not found.');
+
+    const trips = await this.prisma.trip.findMany({
+      where: { status: 'REQUESTED' },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        reference: true,
+        serviceType: true,
+        pickupAddress: true,
+        pickupLatitude: true,
+        pickupLongitude: true,
+        dropoffAddress: true,
+        createdAt: true,
+        fareQuote: { select: { totalFare: true } }
+      }
+    });
+
+    return {
+      trips: trips.map((t: any) => ({
+        id: t.id,
+        reference: t.reference,
+        serviceType: t.serviceType,
+        pickup: { address: t.pickupAddress, latitude: t.pickupLatitude, longitude: t.pickupLongitude },
+        dropoff: { address: t.dropoffAddress },
+        fare: t.fareQuote ? { totalFare: t.fareQuote.totalFare } : null,
+        createdAt: t.createdAt
+      }))
+    };
+  }
+
+  async driverAcceptTrip(tripId: string, userId: string) {
+    const driverProfile = await this.prisma.driverProfile.findUnique({
+      where: { userId },
+      select: { id: true, isOnline: true, currentStatus: true, activeVehicleId: true }
+    });
+    if (!driverProfile) throw new ForbiddenException('Driver profile not found. Complete onboarding first.');
+    if (!driverProfile.isOnline || driverProfile.currentStatus !== 'AVAILABLE') {
+      throw new ForbiddenException('Driver must be online and available to accept trips.');
+    }
+    if (!driverProfile.activeVehicleId) {
+      throw new ForbiddenException('Driver must have an active vehicle assigned.');
+    }
+
+    const existingActiveTrip = await this.prisma.trip.findFirst({
+      where: {
+        driverProfileId: driverProfile.id,
+        status: { in: ['DRIVER_ASSIGNED', 'DRIVER_ARRIVING', 'DRIVER_ARRIVED', 'PIN_VERIFIED', 'IN_PROGRESS'] as TripStatus[] }
+      },
+      select: { id: true }
+    });
+    if (existingActiveTrip) {
+      throw new ForbiddenException('Driver already has an active trip.');
+    }
+
+    const pin = Math.floor(1000 + Math.random() * 9000).toString();
+    const pinExpiresAt = new Date(Date.now() + PIN_TTL_MS);
+
+    await this.prisma.$transaction(async (tx: any) => {
+      const trip = await tx.trip.findUnique({ where: { id: tripId }, select: { id: true, status: true } });
+      if (!trip) throw new NotFoundException('Trip not found.');
+      if (trip.status !== 'REQUESTED') throw new ForbiddenException('Trip is no longer available.');
+
+      await tx.trip.update({
+        where: { id: tripId },
+        data: {
+          driverProfileId: driverProfile.id,
+          vehicleId: driverProfile.activeVehicleId,
+          status: 'DRIVER_ARRIVING' as TripStatus,
+          pinCode: pin,
+          pinExpiresAt,
+          acceptedAt: new Date()
+        }
+      });
+
+      await tx.driverProfile.update({
+        where: { id: driverProfile.id },
+        data: { currentStatus: 'ON_TRIP' }
+      });
+
+      await tx.tripEvent.createMany({
+        data: [
+          {
+            tripId,
+            eventType: 'DRIVER_SELF_ASSIGNED',
+            metadata: { driverProfileId: driverProfile.id, vehicleId: driverProfile.activeVehicleId },
+            occurredAt: new Date()
+          },
+          {
+            tripId,
+            eventType: 'STATE_CHANGE:DRIVER_ARRIVING',
+            metadata: { actorId: userId, reason: 'driver_accepted' },
+            occurredAt: new Date()
+          }
+        ]
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: userId,
+          action: 'TRIP_STATE_DRIVER_ARRIVING',
+          entity: 'TRIP',
+          entityId: tripId,
+          payload: { driverProfileId: driverProfile.id }
+        }
+      });
+    });
+
+    return this.getTripForUser(tripId, userId, 'DRIVER');
+  }
+
+  async getDriverActiveTrip(userId: string) {
+    const driverProfile = await this.prisma.driverProfile.findUnique({
+      where: { userId },
+      select: { id: true }
+    });
+    if (!driverProfile) throw new ForbiddenException('Driver profile not found.');
+
+    const DRIVER_ACTIVE_STATUSES: TripStatus[] = [
+      'DRIVER_ASSIGNED', 'DRIVER_ARRIVING', 'DRIVER_ARRIVED', 'PIN_VERIFIED', 'IN_PROGRESS'
+    ];
+
+    const trip = await this.prisma.trip.findFirst({
+      where: { driverProfileId: driverProfile.id, status: { in: DRIVER_ACTIVE_STATUSES } },
       orderBy: { createdAt: 'desc' },
       include: {
         riderProfile: { include: { user: { select: { id: true, displayName: true, phone: true } } } },

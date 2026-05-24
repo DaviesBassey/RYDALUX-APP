@@ -45,13 +45,13 @@ api.interceptors.response.use(
     isRefreshing = true;
 
     try {
-      const { refreshToken } = await getTokens();
+      const stored = await getTokens();
       const fingerprint = await getOrCreateFingerprint();
       const { data } = await axios.post<{ accessToken: string; refreshToken: string }>(
         `${BASE_URL}/auth/refresh`,
-        { token: refreshToken, fingerprint }
+        { token: stored.refreshToken, fingerprint }
       );
-      await saveTokens(data);
+      await saveTokens({ ...data, userType: stored.userType ?? 'RIDER' });
       pendingQueue.forEach((cb) => cb(data.accessToken));
       pendingQueue = [];
       original.headers.Authorization = `Bearer ${data.accessToken}`;

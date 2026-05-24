@@ -16,10 +16,12 @@ import { requestOtp } from '../../api/auth';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
 
 type Nav = NativeStackNavigationProp<AuthStackParamList, 'Phone'>;
+type Intent = 'RIDER' | 'DRIVER';
 
 export default function PhoneScreen() {
   const navigation = useNavigation<Nav>();
   const [phone, setPhone] = useState('');
+  const [intent, setIntent] = useState<Intent>('RIDER');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -33,9 +35,9 @@ export default function PhoneScreen() {
     setLoading(true);
     try {
       const res = await requestOtp(trimmed);
-      navigation.navigate('Otp', { phone: trimmed, devCode: res.devCode });
+      navigation.navigate('Otp', { phone: trimmed, devCode: res.devCode, intent });
     } catch (e: any) {
-      setError(e?.response?.data?.message ?? 'Failed to send OTP. Try again.');
+      setError(e?.response?.data?.error?.message ?? e?.response?.data?.message ?? 'Failed to send OTP. Try again.');
     } finally {
       setLoading(false);
     }
@@ -48,6 +50,20 @@ export default function PhoneScreen() {
           <Text style={styles.brand}>Rydalux</Text>
           <Text style={styles.heading}>Enter your phone number</Text>
           <Text style={styles.sub}>We'll send a one-time code to verify your number.</Text>
+
+          <View style={styles.toggle}>
+            {(['RIDER', 'DRIVER'] as Intent[]).map((role) => (
+              <TouchableOpacity
+                key={role}
+                style={[styles.toggleBtn, intent === role && styles.toggleBtnActive]}
+                onPress={() => setIntent(role)}
+              >
+                <Text style={[styles.toggleText, intent === role && styles.toggleTextActive]}>
+                  {role === 'RIDER' ? 'Rider' : 'Driver'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
           <TextInput
             style={styles.input}
@@ -78,7 +94,24 @@ const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', padding: 28 },
   brand: { fontSize: 32, fontWeight: '800', color: '#e94560', marginBottom: 32 },
   heading: { fontSize: 22, fontWeight: '700', color: '#1a1a2e', marginBottom: 8 },
-  sub: { fontSize: 14, color: '#666', marginBottom: 28, lineHeight: 20 },
+  sub: { fontSize: 14, color: '#666', marginBottom: 20, lineHeight: 20 },
+  toggle: {
+    flexDirection: 'row',
+    borderWidth: 1.5,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 20,
+  },
+  toggleBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: '#fafafa',
+  },
+  toggleBtnActive: { backgroundColor: '#e94560' },
+  toggleText: { fontSize: 15, fontWeight: '600', color: '#888' },
+  toggleTextActive: { color: '#fff' },
   input: {
     borderWidth: 1.5,
     borderColor: '#ddd',

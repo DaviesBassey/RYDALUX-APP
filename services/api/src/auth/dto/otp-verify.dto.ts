@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, Matches, MinLength } from 'class-validator';
+import { IsIn, IsNotEmpty, IsOptional, IsString, Matches, MinLength } from 'class-validator';
 
 export class OtpVerifyDto {
   @IsString()
@@ -17,5 +17,10 @@ export class OtpVerifyDto {
   fingerprint: string;
 
   @IsString()
+  @IsOptional()
   deviceName?: string;
+
+  @IsIn(['RIDER', 'DRIVER'])
+  @IsOptional()
+  intent?: 'RIDER' | 'DRIVER';
 }

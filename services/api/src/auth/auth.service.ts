@@ -85,18 +85,29 @@ export class AuthService {
       data: { usedAt: new Date() }
     });
 
+    const intent = payload.intent ?? 'RIDER';
+
     const user = await this.prisma.user.upsert({
       where: { phone: payload.phone },
       update: { lastLoginAt: now },
       create: {
         phone: payload.phone,
         email: `${payload.phone}@placeholder.rydulux.local`,
-        userType: 'RIDER',
+        userType: intent,
         isPhoneVerified: true,
         createdAt: now,
         updatedAt: now
       }
     });
+
+    // Prevent cross-role login: a RIDER account cannot log in with DRIVER intent and vice versa.
+    if (user.userType !== intent) {
+      const registered = user.userType === 'DRIVER' ? 'driver' : 'rider';
+      const attempted = intent === 'DRIVER' ? 'driver' : 'rider';
+      throw new ForbiddenException(
+        `This phone is registered as a ${registered} account. Please use ${registered} login instead of ${attempted} login.`
+      );
+    }
 
     const device = await this.getOrCreateDevice(user.id, payload.fingerprint, payload.deviceName);
     const tokens = await this.createSessionTokens(user.id, device.id, user.userType);
@@ -223,7 +234,7 @@ export class AuthService {
       { secret: this.configService.get<string>('JWT_ACCESS_SECRET', 'change-me'), expiresIn: ACCESS_TOKEN_EXPIRES_IN }
     );
 
-    return { accessToken, refreshToken, expiresIn: ACCESS_TOKEN_EXPIRES_IN };
+    return { accessToken, refreshToken, expiresIn: ACCESS_TOKEN_EXPIRES_IN, userType };
   }
 
   private async createRefreshToken(userId: string, sessionId: string) {

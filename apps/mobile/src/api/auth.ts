@@ -11,6 +11,7 @@ export type TokenResponse = {
   accessToken: string;
   refreshToken: string;
   expiresIn: string;
+  userType: 'RIDER' | 'DRIVER';
 };
 
 export async function requestOtp(phone: string): Promise<OtpRequestResponse> {
@@ -23,13 +24,18 @@ export async function requestOtp(phone: string): Promise<OtpRequestResponse> {
   return data;
 }
 
-export async function verifyOtp(phone: string, code: string): Promise<TokenResponse> {
+export async function verifyOtp(
+  phone: string,
+  code: string,
+  intent: 'RIDER' | 'DRIVER' = 'RIDER'
+): Promise<TokenResponse> {
   const fingerprint = await getOrCreateFingerprint();
   const { data } = await api.post<TokenResponse>('/auth/otp/verify', {
     phone,
     code,
     fingerprint,
     deviceName: 'Rydalux Mobile',
+    intent,
   });
   return data;
 }

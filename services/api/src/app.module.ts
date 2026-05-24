@@ -14,6 +14,9 @@ import { TripsModule } from './trips/trips.module';
 import { PaymentsModule } from './payments/payments.module';
 import { SafetyModule } from './safety/safety.module';
 import { AdminModule } from './admin/admin.module';
+import { DevModule } from './dev/dev.module';
+
+const devModules = process.env.NODE_ENV === 'development' ? [DevModule] : [];
 
 @Module({
   imports: [
@@ -27,7 +30,8 @@ import { AdminModule } from './admin/admin.module';
     TripsModule,
     PaymentsModule,
     SafetyModule,
-    AdminModule
+    AdminModule,
+    ...devModules,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }]

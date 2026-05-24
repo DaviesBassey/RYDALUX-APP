@@ -32,8 +32,7 @@ export class DriversController {
   @Get('onboarding/status')
   async getOnboardingStatus(@Req() req: Request) {
     const user = req.user as any;
-    const approved = await this.driversService.canActivateOnline(user.userId);
-    return { fullyApproved: approved };
+    return this.driversService.getOnboardingStatus(user.userId);
   }
 
   @Patch('onboarding/activate')

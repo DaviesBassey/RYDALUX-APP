@@ -165,6 +165,23 @@ export class DriversService {
     return { uploadUrl: this.buildUploadUrl(documentId) };
   }
 
+  async getOnboardingStatus(userId: string) {
+    const profile = await this.prisma.driverProfile.findUnique({
+      where: { userId },
+      include: {
+        driverDocuments: true,
+        activeVehicle: { include: { documents: true } }
+      }
+    });
+
+    if (!profile) {
+      return { profileExists: false, fullyApproved: false };
+    }
+
+    const fullyApproved = this._checkApproval(profile);
+    return { profileExists: true, fullyApproved };
+  }
+
   async canActivateOnline(userId: string) {
     const profile = await this.prisma.driverProfile.findUnique({
       where: { userId },
@@ -178,10 +195,16 @@ export class DriversService {
       return false;
     }
 
+    return this._checkApproval(profile);
+  }
+
+  private _checkApproval(profile: any): boolean {
+    if (!profile.activeVehicleId || !profile.activeVehicle) return false;
+
     const now = new Date();
 
     const hasApprovedDriverDocs = REQUIRED_DRIVER_DOCUMENT_TYPES.every((type) =>
-      profile.driverDocuments.some((doc) =>
+      profile.driverDocuments.some((doc: { documentType: string; status: string; expiresAt: Date | null }) =>
         doc.documentType === type &&
         doc.status === 'APPROVED' &&
         (!doc.expiresAt || doc.expiresAt > now)

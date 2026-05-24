@@ -36,11 +36,23 @@ export class TripsController {
     return this.tripsService.createTrip(req.user.userId, body);
   }
 
-  // IMPORTANT: declared before @Get(':id') so "rider" is not consumed as :id
+  // IMPORTANT: static segments declared before @Get(':id') so they are not consumed as :id
   @Get('rider/active')
   @UseGuards(JwtAuthGuard, RiderOnlyGuard)
   async getActiveTrip(@Req() req: any) {
     return this.tripsService.getActiveTrip(req.user.userId);
+  }
+
+  @Get('driver/available')
+  @UseGuards(JwtAuthGuard, DriverOnlyGuard)
+  async getAvailableTrips(@Req() req: any) {
+    return this.tripsService.getAvailableTrips(req.user.userId);
+  }
+
+  @Get('driver/active')
+  @UseGuards(JwtAuthGuard, DriverOnlyGuard)
+  async getDriverActiveTrip(@Req() req: any) {
+    return this.tripsService.getDriverActiveTrip(req.user.userId);
   }
 
   @Get(':id')
@@ -51,12 +63,19 @@ export class TripsController {
 
   // ── Dispatch & driver endpoints ────────────────────────────────────────────
 
+  @Post(':id/driver/accept')
+  @UseGuards(JwtAuthGuard, DriverOnlyGuard)
+  async driverAccept(@Param('id') id: string, @Req() req: any) {
+    return this.tripsService.driverAcceptTrip(id, req.user.userId);
+  }
+
   @Post(':id/dispatch')
   async dispatch(@Param('id') id: string) {
     return this.tripsService.dispatchTrip(id);
   }
 
   @Post(':id/drivers/:driverId/accept')
+  @UseGuards(JwtAuthGuard, DriverOnlyGuard)
   async accept(
     @Param('id') id: string,
     @Param('driverId') driverId: string,
@@ -66,6 +85,7 @@ export class TripsController {
   }
 
   @Post(':id/drivers/:driverId/reject')
+  @UseGuards(JwtAuthGuard, DriverOnlyGuard)
   async reject(
     @Param('id') id: string,
     @Param('driverId') driverId: string,

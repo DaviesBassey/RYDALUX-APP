@@ -8,20 +8,31 @@ import { StatusBar } from 'expo-status-bar';
 import { AuthContext } from './src/context/AuthContext';
 import AuthNavigator from './src/navigation/AuthNavigator';
 import MainNavigator from './src/navigation/MainNavigator';
+import DriverNavigator from './src/navigation/DriverNavigator';
 import { getTokens } from './src/store/authStore';
 
-type AppState = 'loading' | 'auth' | 'main';
+type AppState = 'loading' | 'auth' | 'rider' | 'driver';
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>('loading');
 
   useEffect(() => {
-    getTokens().then(({ accessToken }) => {
-      setAppState(accessToken ? 'main' : 'auth');
+    getTokens().then(({ accessToken, userType }) => {
+      if (!accessToken) {
+        setAppState('auth');
+      } else if (userType === 'DRIVER') {
+        setAppState('driver');
+      } else {
+        setAppState('rider');
+      }
     });
   }, []);
 
-  const login = useCallback(() => setAppState('main'), []);
+  const login = useCallback(async () => {
+    const { userType } = await getTokens();
+    setAppState(userType === 'DRIVER' ? 'driver' : 'rider');
+  }, []);
+
   const logout = useCallback(() => setAppState('auth'), []);
 
   if (appState === 'loading') {
@@ -36,7 +47,13 @@ export default function App() {
     <SafeAreaProvider>
       <AuthContext.Provider value={{ login, logout }}>
         <NavigationContainer>
-          {appState === 'auth' ? <AuthNavigator /> : <MainNavigator />}
+          {appState === 'auth' ? (
+            <AuthNavigator />
+          ) : appState === 'driver' ? (
+            <DriverNavigator />
+          ) : (
+            <MainNavigator />
+          )}
         </NavigationContainer>
       </AuthContext.Provider>
       <StatusBar style="dark" />
