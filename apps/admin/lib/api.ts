@@ -227,6 +227,9 @@ export const api = {
   getFinanceWallets: (limit = 20, offset = 0) => fetchJson<any>(`/admin/finance/wallets?limit=${limit}&offset=${offset}`),
   getFinanceReconciliation: () => fetchJson<any>('/admin/finance/reconciliation'),
   runFinanceReconciliation: () => fetchJson<any>('/admin/finance/reconciliation/run', { method: 'POST' }),
+  runFinanceProviderEventRetries: () => fetchJson<any>('/admin/finance/reconciliation/retry-provider-events', { method: 'POST' }),
+  getFinanceSchedulerStatus: () => fetchJson<any>('/admin/finance/reconciliation/status'),
+  getFinanceReconciliationJobs: (limit = 20, offset = 0) => fetchJson<any>(`/admin/finance/reconciliation/jobs?limit=${limit}&offset=${offset}`),
   getFinanceReconciliationMismatches: (limit = 50, offset = 0) => fetchJson<any>(`/admin/finance/reconciliation/mismatches?limit=${limit}&offset=${offset}`),
   getFinanceProviderEvents: (status = '', limit = 20, offset = 0) =>
     fetchJson<any>(`/admin/finance/provider-events?${new URLSearchParams({ ...(status ? { status } : {}), limit: String(limit), offset: String(offset) })}`),
@@ -242,4 +245,7 @@ export const api = {
   resolveFinanceDispute: (id: string, resolution: 'WON' | 'LOST' | 'CLOSED', notes?: string) =>
     fetchJson<any>(`/admin/finance/disputes/${id}/resolve`, { method: 'POST', body: JSON.stringify({ resolution, notes }) }),
   getFinanceOperations: (limit = 20, offset = 0) => fetchJson<any>(`/admin/finance/operations?limit=${limit}&offset=${offset}`),
+  generateDailyClose: () => fetchJson<any>('/admin/finance/daily-close/generate', { method: 'POST' }),
+  getDailyCloseReports: (limit = 20, offset = 0) => fetchJson<any>(`/admin/finance/daily-close?limit=${limit}&offset=${offset}`),
+  getLatestDailyCloseReport: () => fetchJson<any>('/admin/finance/daily-close/latest'),
 };

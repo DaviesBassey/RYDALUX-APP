@@ -15,6 +15,9 @@ export default function FinancePage() {
   const [refunds, setRefunds] = useState<any>(null);
   const [disputes, setDisputes] = useState<any>(null);
   const [operations, setOperations] = useState<any>(null);
+  const [schedulerStatus, setSchedulerStatus] = useState<any>(null);
+  const [dailyClose, setDailyClose] = useState<any>(null);
+  const [reconciliationJobs, setReconciliationJobs] = useState<any>(null);
   const [actionMessage, setActionMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -23,7 +26,7 @@ export default function FinancePage() {
     setLoading(true);
     setError('');
     try {
-      const [sum, pay, po, led, wal, rec, mm, events, rfd, dsp, ops] = await Promise.all([
+      const [sum, pay, po, led, wal, rec, mm, events, rfd, dsp, ops, status, close, jobs] = await Promise.all([
         api.getFinanceSummary(),
         api.getFinancePayments(10, 0),
         api.getFinancePayouts(10, 0),
@@ -35,6 +38,9 @@ export default function FinancePage() {
         api.getFinanceRefunds(10, 0),
         api.getFinanceDisputes(10, 0),
         api.getFinanceOperations(10, 0),
+        api.getFinanceSchedulerStatus(),
+        api.getLatestDailyCloseReport(),
+        api.getFinanceReconciliationJobs(10, 0),
       ]);
       setSummary(sum);
       setPayments(pay);
@@ -47,6 +53,9 @@ export default function FinancePage() {
       setRefunds(rfd);
       setDisputes(dsp);
       setOperations(ops);
+      setSchedulerStatus(status);
+      setDailyClose(close);
+      setReconciliationJobs(jobs);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -64,6 +73,30 @@ export default function FinancePage() {
     try {
       const result = await api.runFinanceReconciliation();
       setActionMessage(`Reconciliation complete. Mismatches: ${result.mismatches?.total ?? 0}`);
+      await load();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
+
+  async function retryDueProviderEvents() {
+    setActionMessage('');
+    setError('');
+    try {
+      const result = await api.runFinanceProviderEventRetries();
+      setActionMessage(`Provider event retry complete. Retried: ${result.retried ?? 0}`);
+      await load();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
+
+  async function generateDailyClose() {
+    setActionMessage('');
+    setError('');
+    try {
+      const result = await api.generateDailyClose();
+      setActionMessage(`Daily close generated: ${result.report?.status ?? 'UNKNOWN'}`);
       await load();
     } catch (err: any) {
       setError(err.message);
@@ -209,6 +242,42 @@ export default function FinancePage() {
             </div>
           )}
 
+          {schedulerStatus && (
+            <div style={cardStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 16 }}>
+                <h2 style={{ ...sectionTitle, margin: 0 }}>Scheduled Reliability</h2>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={retryDueProviderEvents} style={{ border: '1px solid #111827', borderRadius: 8, background: '#fff', color: '#111827', padding: '10px 14px', fontWeight: 700, cursor: 'pointer' }}>
+                    Retry Due Events
+                  </button>
+                  <button onClick={generateDailyClose} style={{ border: 'none', borderRadius: 8, background: '#111827', color: '#f9d36a', padding: '10px 14px', fontWeight: 700, cursor: 'pointer' }}>
+                    Generate Daily Close
+                  </button>
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+                <div><div style={{ fontSize: 20, fontWeight: 700 }}>{schedulerStatus.lastReconciliationRun?.status ?? 'NONE'}</div><div style={labelStyle}>Last Reconciliation</div></div>
+                <div><div style={{ fontSize: 20, fontWeight: 700 }}>{schedulerStatus.nextRetryAt ? new Date(schedulerStatus.nextRetryAt).toLocaleTimeString() : '—'}</div><div style={labelStyle}>Next Retry Time</div></div>
+                <div><div style={{ fontSize: 20, fontWeight: 700 }}>{schedulerStatus.failedProviderEvents ?? 0}</div><div style={labelStyle}>Failed Provider Events</div></div>
+                <div><div style={{ fontSize: 20, fontWeight: 700 }}>{schedulerStatus.staleProcessingPayouts ?? 0}</div><div style={labelStyle}>Stale Payouts</div></div>
+                <div><div style={{ fontSize: 20, fontWeight: 700 }}>{schedulerStatus.unreversedRefunds ?? 0}</div><div style={labelStyle}>Unreversed Refunds</div></div>
+              </div>
+            </div>
+          )}
+
+          {dailyClose?.report && (
+            <div style={cardStyle}>
+              <h2 style={sectionTitle}>Daily Close Summary</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12 }}>
+                <div><div style={{ fontSize: 20, fontWeight: 700 }}>{new Date(dailyClose.report.closeDate).toLocaleDateString()}</div><div style={labelStyle}>Close Date</div></div>
+                <div><div style={{ fontSize: 20, fontWeight: 700 }}>₦{parseFloat(dailyClose.report.grossCapturedAmount).toLocaleString()}</div><div style={labelStyle}>Gross Captured</div></div>
+                <div><div style={{ fontSize: 20, fontWeight: 700 }}>₦{parseFloat(dailyClose.report.refundAmount).toLocaleString()}</div><div style={labelStyle}>Refunds</div></div>
+                <div><div style={{ fontSize: 20, fontWeight: 700 }}>₦{parseFloat(dailyClose.report.paidPayoutAmount).toLocaleString()}</div><div style={labelStyle}>Paid Payouts</div></div>
+                <div><div style={{ fontSize: 20, fontWeight: 700 }}>{dailyClose.report.status}</div><div style={labelStyle}>Status</div></div>
+              </div>
+            </div>
+          )}
+
           {mismatches && (
             <div style={cardStyle}>
               <h2 style={sectionTitle}>Mismatch Report ({mismatches.total ?? 0})</h2>
@@ -219,6 +288,36 @@ export default function FinancePage() {
                 <div><div style={{ fontSize: 20, fontWeight: 700 }}>{mismatches.paidPayoutsMissingLedger?.length ?? 0}</div><div style={labelStyle}>Payout Ledger Gaps</div></div>
                 <div><div style={{ fontSize: 20, fontWeight: 700 }}>{mismatches.operations?.length ?? 0}</div><div style={labelStyle}>Operations</div></div>
               </div>
+            </div>
+          )}
+
+          {reconciliationJobs && (
+            <div style={cardStyle}>
+              <h2 style={sectionTitle}>Reconciliation Jobs ({reconciliationJobs.total})</h2>
+              {reconciliationJobs.items.length === 0 ? (
+                <div style={{ color: '#6b7280' }}>No reconciliation jobs.</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                  <thead>
+                    <tr style={{ background: '#f9fafb' }}>
+                      <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>Type</th>
+                      <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>Status</th>
+                      <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>Updated</th>
+                      <th style={{ textAlign: 'left', padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>Error</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reconciliationJobs.items.map((job: any) => (
+                      <tr key={job.id}>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>{job.operationType}</td>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>{job.status}</td>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e7eb' }}>{new Date(job.updatedAt).toLocaleString()}</td>
+                        <td style={{ padding: '10px 16px', borderBottom: '1px solid #e5e7eb', color: '#6b7280' }}>{job.errorMessage ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           )}
 

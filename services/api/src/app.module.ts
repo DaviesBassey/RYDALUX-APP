@@ -16,6 +16,7 @@ import { SafetyModule } from './safety/safety.module';
 import { AdminModule } from './admin/admin.module';
 import { DevModule } from './dev/dev.module';
 import { IdempotencyModule } from './idempotency/idempotency.module';
+import { SchedulerModule } from './scheduler/scheduler.module';
 
 const devModules = process.env.NODE_ENV === 'development' ? [DevModule] : [];
 
@@ -31,6 +32,7 @@ const devModules = process.env.NODE_ENV === 'development' ? [DevModule] : [];
     TripsModule,
     IdempotencyModule,
     PaymentsModule,
+    SchedulerModule,
     SafetyModule,
     AdminModule,
     ...devModules,

@@ -4,9 +4,10 @@ import { AdminController } from './admin.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { IdempotencyModule } from '../idempotency/idempotency.module';
+import { SchedulerModule } from '../scheduler/scheduler.module';
 
 @Module({
-  imports: [PrismaModule, PaymentsModule, IdempotencyModule],
+  imports: [PrismaModule, PaymentsModule, IdempotencyModule, SchedulerModule],
   providers: [AdminService],
   controllers: [AdminController]
 })

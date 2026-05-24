@@ -133,6 +133,9 @@ enum FinancialOperationType {
   PAYOUT_RETRY
   REFUND_INITIATION
   MANUAL_RECONCILIATION
+  SCHEDULED_RECONCILIATION
+  PROVIDER_EVENT_RETRY
+  DAILY_CLOSE
 }
 
 enum FinancialOperationStatus {
@@ -1006,6 +1009,29 @@ model FinancialOperation {
   @@index([provider, providerReference])
   @@index([entityType, entityId])
   @@index([status, nextRetryAt])
+}
+
+model DailyCloseReport {
+  id                       String   @id @default(uuid()) @db.Uuid
+  closeDate                DateTime
+  currency                 String   @default("NGN")
+  grossCapturedAmount      Decimal  @default(0.00) @db.Decimal(18, 2)
+  refundAmount             Decimal  @default(0.00) @db.Decimal(18, 2)
+  paidPayoutAmount         Decimal  @default(0.00) @db.Decimal(18, 2)
+  platformCommissionAmount Decimal  @default(0.00) @db.Decimal(18, 2)
+  driverEarningAmount      Decimal  @default(0.00) @db.Decimal(18, 2)
+  failedProviderEvents     Int      @default(0)
+  staleProcessingPayouts   Int      @default(0)
+  unreversedRefunds        Int      @default(0)
+  status                   String   @default("GENERATED")
+  metadata                 Json?
+  generatedAt              DateTime @default(now())
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@unique([closeDate, currency])
+  @@index([closeDate])
+  @@index([status])
 }
 
 model CityZone {

@@ -20,6 +20,7 @@ import { RequestRefundDto } from './dto/request-refund.dto';
 import { RetryPayoutDto } from './dto/retry-payout.dto';
 import { DeadLetterProviderEventDto } from './dto/dead-letter-provider-event.dto';
 import { ResolveDisputeDto, UpdateDisputeAdminDto } from './dto/update-dispute-admin.dto';
+import { FinanceSchedulerService } from '../scheduler/finance-scheduler.service';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, AdminOnlyGuard, PermissionsGuard)
@@ -29,6 +30,7 @@ export class AdminController {
     private readonly paymentsService: PaymentsService,
     private readonly idempotencyService: IdempotencyService,
     private readonly paystackService: PaystackService,
+    private readonly financeSchedulerService: FinanceSchedulerService,
   ) {}
 
   @Post('kyc/approve')
@@ -215,6 +217,33 @@ export class AdminController {
     }, () => this.paystackService.runManualReconciliation(user.userId));
   }
 
+  @Post('finance/reconciliation/retry-provider-events')
+  @Permissions('FINANCE_MANAGER')
+  runProviderEventRetries(@Req() req: Request, @Headers('idempotency-key') idempotencyKey?: string) {
+    const user = req.user as any;
+    return this.idempotencyService.run({
+      key: idempotencyKey,
+      scope: 'admin:finance:provider-events:retry-due',
+      method: req.method,
+      endpoint: req.route?.path ?? '/admin/finance/reconciliation/retry-provider-events',
+      actorId: user.userId,
+      body: {},
+      ttlMs: 60 * 60 * 1000,
+    }, () => this.financeSchedulerService.runDueProviderEventRetries('manual'));
+  }
+
+  @Get('finance/reconciliation/status')
+  @Permissions('FINANCE_MANAGER')
+  getFinanceSchedulerStatus() {
+    return this.financeSchedulerService.getSchedulerStatus();
+  }
+
+  @Get('finance/reconciliation/jobs')
+  @Permissions('FINANCE_MANAGER')
+  listFinanceReconciliationJobs(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.financeSchedulerService.listReconciliationJobs(Number(limit) || 20, Number(offset) || 0);
+  }
+
   @Get('finance/reconciliation/mismatches')
   @Permissions('FINANCE_MANAGER')
   getFinanceReconciliationMismatches(@Query('limit') limit?: string, @Query('offset') offset?: string) {
@@ -231,6 +260,33 @@ export class AdminController {
   @Permissions('FINANCE_MANAGER')
   listFinancialOperations(@Query('limit') limit?: string, @Query('offset') offset?: string) {
     return this.paystackService.listFinancialOperations(Number(limit) || 20, Number(offset) || 0);
+  }
+
+  @Post('finance/daily-close/generate')
+  @Permissions('FINANCE_MANAGER')
+  generateDailyClose(@Req() req: Request, @Headers('idempotency-key') idempotencyKey?: string) {
+    const user = req.user as any;
+    return this.idempotencyService.run({
+      key: idempotencyKey,
+      scope: 'admin:finance:daily-close:generate',
+      method: req.method,
+      endpoint: req.route?.path ?? '/admin/finance/daily-close/generate',
+      actorId: user.userId,
+      body: {},
+      ttlMs: 60 * 60 * 1000,
+    }, () => this.financeSchedulerService.generateDailyClose());
+  }
+
+  @Get('finance/daily-close')
+  @Permissions('FINANCE_MANAGER')
+  listDailyCloseReports(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.financeSchedulerService.listDailyCloseReports(Number(limit) || 20, Number(offset) || 0);
+  }
+
+  @Get('finance/daily-close/latest')
+  @Permissions('FINANCE_MANAGER')
+  getLatestDailyCloseReport() {
+    return this.financeSchedulerService.getLatestDailyCloseReport();
   }
 
   @Post('finance/provider-events/:id/retry')

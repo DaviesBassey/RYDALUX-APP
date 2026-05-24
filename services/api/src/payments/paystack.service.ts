@@ -779,7 +779,7 @@ export class PaystackService {
     return { items, total, limit, offset };
   }
 
-  async retryProviderEvent(eventId: string, adminId: string) {
+  async retryProviderEvent(eventId: string, adminId: string | null) {
     const providerEvent = await this.prisma.providerEvent.findUnique({ where: { id: eventId } });
     if (!providerEvent) throw new NotFoundException('Provider event not found.');
     if (providerEvent.status === 'PROCESSED' || providerEvent.processedAt) {
@@ -969,7 +969,7 @@ export class PaystackService {
     };
   }
 
-  async runManualReconciliation(adminId: string) {
+  async runManualReconciliation(adminId: string | null) {
     const operation = await this.prisma.financialOperation.create({
       data: {
         operationType: 'MANUAL_RECONCILIATION',
