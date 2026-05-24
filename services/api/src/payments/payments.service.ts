@@ -1,7 +1,67 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-const DRIVER_EARNINGS_RATIO = 0.8; // driver receives 80%, platform retains 20%
+const DRIVER_EARNINGS_BPS = 8000; // driver receives 80%, platform retains 20%
+const PLATFORM_COMMISSION_BPS = 2000;
+const BPS_DENOMINATOR = 10000;
+
+const LEDGER_ACCOUNTS = {
+  CASH_CLEARING: {
+    code: 'platform:cash_clearing:NGN',
+    name: 'Platform cash clearing',
+    accountType: 'ASSET',
+  },
+  COMMISSION_REVENUE: {
+    code: 'platform:commission_revenue:NGN',
+    name: 'Platform commission revenue',
+    accountType: 'REVENUE',
+  },
+  DRIVER_PAYABLE: {
+    code: 'platform:driver_payable:NGN',
+    name: 'Driver payable',
+    accountType: 'LIABILITY',
+  },
+  PAYOUT_CLEARING: {
+    code: 'platform:payout_clearing:NGN',
+    name: 'Payout clearing',
+    accountType: 'LIABILITY',
+  },
+} as const;
+
+type FinancialTx = Prisma.TransactionClient;
+type LedgerEventType =
+  | 'RIDER_PAYMENT_PENDING'
+  | 'RIDER_PAYMENT_AUTHORIZED'
+  | 'RIDER_PAYMENT_CAPTURED'
+  | 'PLATFORM_COMMISSION_RECORDED'
+  | 'DRIVER_EARNING_RECORDED'
+  | 'DRIVER_PAYOUT_PENDING'
+  | 'DRIVER_PAYOUT_PAID'
+  | 'REFUND_PENDING'
+  | 'ADJUSTMENT';
+
+function decimalToMinorUnits(value: { toString(): string }): bigint {
+  const [wholePart, fractionPart = ''] = value.toString().split('.');
+  const normalizedFraction = `${fractionPart}00`.slice(0, 2);
+  return BigInt(wholePart) * 100n + BigInt(normalizedFraction);
+}
+
+function minorUnitsToDecimal(units: bigint): string {
+  const sign = units < 0n ? '-' : '';
+  const absolute = units < 0n ? -units : units;
+  const whole = absolute / 100n;
+  const fraction = (absolute % 100n).toString().padStart(2, '0');
+  return `${sign}${whole}.${fraction}`;
+}
+
+function minorUnitsToNumber(units: bigint): number {
+  return Number(minorUnitsToDecimal(units));
+}
+
+function calculateShare(amountMinor: bigint, basisPoints: number): bigint {
+  return (amountMinor * BigInt(basisPoints)) / BigInt(BPS_DENOMINATOR);
+}
 
 @Injectable()
 export class PaymentsService {
@@ -24,16 +84,44 @@ export class PaymentsService {
 
     const reference = `RYD-PAY-${Date.now().toString(36).toUpperCase()}`;
 
-    const payment = await this.prisma.payment.create({
-      data: {
-        userId,
+    const payment = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.payment.create({
+        data: {
+          userId,
+          tripId,
+          amount: trip.fareQuote.totalFare,
+          currency: 'NGN',
+          provider: 'mock-paystack',
+          status: 'PENDING',
+          reference,
+        },
+      });
+
+      await this.recordAccountEvent(tx, {
+        eventType: 'RIDER_PAYMENT_PENDING',
+        reference: `payment:${created.id}:pending`,
+        referenceType: 'PAYMENT',
+        referenceId: created.id,
+        paymentId: created.id,
         tripId,
-        amount: trip.fareQuote.totalFare,
-        currency: 'NGN',
-        provider: 'mock-paystack',
-        status: 'PENDING',
-        reference,
-      },
+        currency: created.currency,
+        amountMinor: decimalToMinorUnits(created.amount),
+        account: LEDGER_ACCOUNTS.CASH_CLEARING,
+        transactionType: 'CREDIT',
+        description: 'Rider payment pending',
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: userId,
+          action: 'RIDER_PAYMENT_PENDING',
+          entity: 'PAYMENT',
+          entityId: created.id,
+          payload: { tripId, reference: created.reference } as any,
+        },
+      });
+
+      return created;
     });
 
     return {
@@ -82,53 +170,169 @@ export class PaymentsService {
 
   // Called when driver accepts trip — mock auto-authorize
   async authorizePaymentForTrip(tripId: string): Promise<void> {
-    const payment = await this.prisma.payment.findUnique({ where: { tripId } });
-    if (!payment) return;
-    if (payment.status !== 'PENDING') return;
+    await this.prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.findUnique({ where: { tripId } });
+      if (!payment) return;
+      if (payment.status !== 'PENDING') return;
 
-    await this.prisma.payment.update({
-      where: { id: payment.id },
-      data: { status: 'AUTHORIZED', updatedAt: new Date() },
+      const updated = await tx.payment.update({
+        where: { id: payment.id },
+        data: { status: 'AUTHORIZED', updatedAt: new Date() },
+      });
+
+      await this.recordAccountEvent(tx, {
+        eventType: 'RIDER_PAYMENT_AUTHORIZED',
+        reference: `payment:${payment.id}:authorized`,
+        referenceType: 'PAYMENT',
+        referenceId: payment.id,
+        paymentId: payment.id,
+        tripId,
+        currency: payment.currency,
+        amountMinor: decimalToMinorUnits(payment.amount),
+        account: LEDGER_ACCOUNTS.CASH_CLEARING,
+        transactionType: 'CREDIT',
+        description: 'Rider payment authorized',
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: null,
+          action: 'RIDER_PAYMENT_AUTHORIZED',
+          entity: 'PAYMENT',
+          entityId: payment.id,
+          payload: { tripId, status: updated.status } as any,
+        },
+      });
     });
   }
 
   // Called when trip transitions to COMPLETED.
   // Idempotent — safe to call multiple times.
   async capturePaymentForTrip(tripId: string, driverProfileId: string | null): Promise<void> {
-    const payment = await this.prisma.payment.findUnique({ where: { tripId } });
-    if (!payment) return;
-    if (payment.status === 'CAPTURED') return;
-    if (payment.status !== 'PENDING' && payment.status !== 'AUTHORIZED') return;
+    await this.prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.findUnique({ where: { tripId } });
+      if (!payment) return;
+      if (payment.status === 'CAPTURED') return;
+      if (payment.status !== 'PENDING' && payment.status !== 'AUTHORIZED') return;
 
-    await this.prisma.payment.update({
-      where: { id: payment.id },
-      data: { status: 'CAPTURED', updatedAt: new Date() },
-    });
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: { status: 'CAPTURED', updatedAt: new Date() },
+      });
 
-    if (driverProfileId) {
-      // Use integer kobo (1 NGN = 100 kobo) to avoid floating-point errors
-      const amountKobo = Math.round(parseFloat(payment.amount.toString()) * 100);
-      const driverKobo = Math.floor(amountKobo * DRIVER_EARNINGS_RATIO);
-      const driverAmount = (driverKobo / 100).toFixed(2);
-      await this.prisma.payout.create({
+      const grossMinor = decimalToMinorUnits(payment.amount);
+      const driverMinor = calculateShare(grossMinor, DRIVER_EARNINGS_BPS);
+      const commissionMinor = grossMinor - driverMinor;
+
+      await this.recordAccountEvent(tx, {
+        eventType: 'RIDER_PAYMENT_CAPTURED',
+        reference: `payment:${payment.id}:captured`,
+        referenceType: 'PAYMENT',
+        referenceId: payment.id,
+        paymentId: payment.id,
+        tripId,
+        currency: payment.currency,
+        amountMinor: grossMinor,
+        account: LEDGER_ACCOUNTS.CASH_CLEARING,
+        transactionType: 'CREDIT',
+        description: 'Rider payment captured',
+      });
+
+      await this.recordAccountEvent(tx, {
+        eventType: 'PLATFORM_COMMISSION_RECORDED',
+        reference: `payment:${payment.id}:commission`,
+        referenceType: 'PAYMENT',
+        referenceId: payment.id,
+        paymentId: payment.id,
+        tripId,
+        currency: payment.currency,
+        amountMinor: commissionMinor,
+        account: LEDGER_ACCOUNTS.COMMISSION_REVENUE,
+        transactionType: 'CREDIT',
+        description: 'Platform commission recorded',
+        metadata: { commissionBps: PLATFORM_COMMISSION_BPS },
+      });
+
+      if (driverProfileId) {
+        const driverProfile = await tx.driverProfile.findUnique({
+          where: { id: driverProfileId },
+          select: { userId: true },
+        });
+
+        if (driverProfile) {
+          await this.recordWalletEvent(tx, {
+            eventType: 'DRIVER_EARNING_RECORDED',
+            reference: `payment:${payment.id}:driver-earning`,
+            referenceType: 'PAYMENT',
+            referenceId: payment.id,
+            paymentId: payment.id,
+            tripId,
+            userId: driverProfile.userId,
+            currency: payment.currency,
+            amountMinor: driverMinor,
+            transactionType: 'CREDIT',
+            description: 'Driver earning recorded',
+            metadata: { driverProfileId, driverEarningsBps: DRIVER_EARNINGS_BPS },
+          });
+
+          await this.recordAccountEvent(tx, {
+            eventType: 'DRIVER_EARNING_RECORDED',
+            reference: `payment:${payment.id}:driver-payable`,
+            referenceType: 'PAYMENT',
+            referenceId: payment.id,
+            paymentId: payment.id,
+            tripId,
+            currency: payment.currency,
+            amountMinor: driverMinor,
+            account: LEDGER_ACCOUNTS.DRIVER_PAYABLE,
+            transactionType: 'CREDIT',
+            description: 'Driver payable recorded',
+            metadata: { driverProfileId },
+          });
+        }
+
+        const payout = await tx.payout.create({
+          data: {
+            driverProfileId,
+            amount: minorUnitsToDecimal(driverMinor),
+            currency: payment.currency,
+            provider: payment.provider,
+            status: 'PENDING',
+          },
+        });
+
+        await this.recordAccountEvent(tx, {
+          eventType: 'DRIVER_PAYOUT_PENDING',
+          reference: `payout:${payout.id}:pending`,
+          referenceType: 'PAYOUT',
+          referenceId: payout.id,
+          paymentId: payment.id,
+          payoutId: payout.id,
+          tripId,
+          currency: payout.currency,
+          amountMinor: driverMinor,
+          account: LEDGER_ACCOUNTS.PAYOUT_CLEARING,
+          transactionType: 'CREDIT',
+          description: 'Driver payout pending',
+          metadata: { driverProfileId },
+        });
+      }
+
+      await tx.auditLog.create({
         data: {
-          driverProfileId,
-          amount: driverAmount,
-          currency: payment.currency,
-          provider: payment.provider,
-          status: 'PENDING',
+          actorId: null,
+          action: 'PAYMENT_CAPTURED',
+          entity: 'PAYMENT',
+          entityId: payment.id,
+          payload: {
+            tripId,
+            driverProfileId,
+            grossAmount: minorUnitsToDecimal(grossMinor),
+            driverEarning: minorUnitsToDecimal(driverMinor),
+            platformCommission: minorUnitsToDecimal(commissionMinor),
+          } as any,
         },
       });
-    }
-
-    await this.prisma.auditLog.create({
-      data: {
-        actorId: null,
-        action: 'PAYMENT_CAPTURED',
-        entity: 'PAYMENT',
-        entityId: payment.id,
-        payload: { tripId, driverProfileId } as any,
-      },
     });
   }
 
@@ -248,27 +452,194 @@ export class PaymentsService {
       }),
     ]);
 
-    const totalCaptured = parseFloat((capturedAgg._sum.amount ?? 0).toString());
-    const totalPendingPayouts = parseFloat((pendingPayoutsAgg._sum.amount ?? 0).toString());
-    const totalPaidPayouts = parseFloat((paidPayoutsAgg._sum.amount ?? 0).toString());
+    const totalCapturedMinor = decimalToMinorUnits(capturedAgg._sum.amount ?? { toString: () => '0' });
+    const totalPendingPayoutsMinor = decimalToMinorUnits(pendingPayoutsAgg._sum.amount ?? { toString: () => '0' });
+    const totalPaidPayoutsMinor = decimalToMinorUnits(paidPayoutsAgg._sum.amount ?? { toString: () => '0' });
+    const platformRevenueMinor = totalCapturedMinor - totalPaidPayoutsMinor - totalPendingPayoutsMinor;
 
     return {
-      totalCaptured,
+      totalCaptured: minorUnitsToNumber(totalCapturedMinor),
       capturedCount: capturedAgg._count.id,
       byStatus: byStatus.map((row) => ({
         status: row.status,
         count: row._count.id,
-        total: parseFloat((row._sum.amount ?? 0).toString()),
+        total: minorUnitsToNumber(decimalToMinorUnits(row._sum.amount ?? { toString: () => '0' })),
       })),
       pendingPayouts: {
-        total: totalPendingPayouts,
+        total: minorUnitsToNumber(totalPendingPayoutsMinor),
         count: pendingPayoutsAgg._count.id,
       },
       paidPayouts: {
-        total: totalPaidPayouts,
+        total: minorUnitsToNumber(totalPaidPayoutsMinor),
         count: paidPayoutsAgg._count.id,
       },
-      platformRevenue: Math.round((totalCaptured - totalPaidPayouts - totalPendingPayouts) * 100) / 100,
+      platformRevenue: minorUnitsToNumber(platformRevenueMinor),
     };
+  }
+
+  private async ensureLedgerAccount(
+    tx: FinancialTx,
+    account: { code: string; name: string; accountType: string },
+    currency: string
+  ) {
+    return tx.ledgerAccount.upsert({
+      where: { code: account.code },
+      update: {},
+      create: {
+        code: account.code,
+        name: account.name,
+        accountType: account.accountType,
+        currency,
+      },
+    });
+  }
+
+  private signedAmount(amountMinor: bigint, transactionType: 'CREDIT' | 'DEBIT'): string {
+    return minorUnitsToDecimal(transactionType === 'DEBIT' ? -amountMinor : amountMinor);
+  }
+
+  private async recordAccountEvent(
+    tx: FinancialTx,
+    input: {
+      eventType: LedgerEventType;
+      reference: string;
+      referenceType: string;
+      referenceId: string;
+      paymentId?: string;
+      payoutId?: string;
+      tripId?: string;
+      currency: string;
+      amountMinor: bigint;
+      account: { code: string; name: string; accountType: string };
+      transactionType: 'CREDIT' | 'DEBIT';
+      description: string;
+      metadata?: Record<string, unknown>;
+    }
+  ) {
+    const existing = await tx.financialTransaction.findUnique({ where: { reference: input.reference } });
+    if (existing) return existing;
+
+    const account = await this.ensureLedgerAccount(tx, input.account, input.currency);
+    const updatedAccount = await tx.ledgerAccount.update({
+      where: { id: account.id },
+      data: { balance: { increment: this.signedAmount(input.amountMinor, input.transactionType) } },
+    });
+
+    const financialTransaction = await tx.financialTransaction.create({
+      data: {
+        eventType: input.eventType,
+        reference: input.reference,
+        referenceType: input.referenceType,
+        referenceId: input.referenceId,
+        paymentId: input.paymentId,
+        payoutId: input.payoutId,
+        tripId: input.tripId,
+        currency: input.currency,
+        amount: minorUnitsToDecimal(input.amountMinor),
+        metadata: input.metadata as any,
+      },
+    });
+
+    await tx.ledgerEntry.create({
+      data: {
+        ledgerAccountId: account.id,
+        financialTransactionId: financialTransaction.id,
+        eventType: input.eventType,
+        transactionType: input.transactionType,
+        amount: minorUnitsToDecimal(input.amountMinor),
+        balanceAfter: updatedAccount.balance,
+        referenceType: input.referenceType,
+        referenceId: input.referenceId,
+        description: input.description,
+        metadata: input.metadata as any,
+      },
+    });
+
+    return financialTransaction;
+  }
+
+  private async recordWalletEvent(
+    tx: FinancialTx,
+    input: {
+      eventType: LedgerEventType;
+      reference: string;
+      referenceType: string;
+      referenceId: string;
+      paymentId?: string;
+      payoutId?: string;
+      tripId?: string;
+      userId: string;
+      currency: string;
+      amountMinor: bigint;
+      transactionType: 'CREDIT' | 'DEBIT';
+      description: string;
+      metadata?: Record<string, unknown>;
+    }
+  ) {
+    const existing = await tx.financialTransaction.findUnique({ where: { reference: input.reference } });
+    if (existing) return existing;
+
+    const wallet = await tx.wallet.upsert({
+      where: { userId: input.userId },
+      update: {},
+      create: {
+        userId: input.userId,
+        currency: input.currency,
+      },
+    });
+
+    const balanceBefore = wallet.balance;
+    const updatedWallet = await tx.wallet.update({
+      where: { id: wallet.id },
+      data: { balance: { increment: this.signedAmount(input.amountMinor, input.transactionType) } },
+    });
+
+    const financialTransaction = await tx.financialTransaction.create({
+      data: {
+        eventType: input.eventType,
+        reference: input.reference,
+        referenceType: input.referenceType,
+        referenceId: input.referenceId,
+        paymentId: input.paymentId,
+        payoutId: input.payoutId,
+        tripId: input.tripId,
+        currency: input.currency,
+        amount: minorUnitsToDecimal(input.amountMinor),
+        metadata: input.metadata as any,
+      },
+    });
+
+    await tx.ledgerEntry.create({
+      data: {
+        walletId: wallet.id,
+        financialTransactionId: financialTransaction.id,
+        eventType: input.eventType,
+        transactionType: input.transactionType,
+        amount: minorUnitsToDecimal(input.amountMinor),
+        balanceAfter: updatedWallet.balance,
+        referenceType: input.referenceType,
+        referenceId: input.referenceId,
+        description: input.description,
+        metadata: input.metadata as any,
+      },
+    });
+
+    await tx.walletTransaction.create({
+      data: {
+        walletId: wallet.id,
+        financialTransactionId: financialTransaction.id,
+        eventType: input.eventType,
+        transactionType: input.transactionType,
+        amount: minorUnitsToDecimal(input.amountMinor),
+        balanceBefore,
+        balanceAfter: updatedWallet.balance,
+        referenceType: input.referenceType,
+        referenceId: input.referenceId,
+        description: input.description,
+        metadata: input.metadata as any,
+      },
+    });
+
+    return financialTransaction;
   }
 }

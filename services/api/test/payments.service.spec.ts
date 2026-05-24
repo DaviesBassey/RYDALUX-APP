@@ -6,6 +6,7 @@ describe('PaymentsService ownership & isolation', () => {
   let paymentsService: PaymentsService;
 
   const mockPrisma: any = {
+    $transaction: jest.fn((callback) => callback(mockPrisma)),
     trip: {
       findUnique: jest.fn(),
     },
@@ -32,10 +33,37 @@ describe('PaymentsService ownership & isolation', () => {
     auditLog: {
       create: jest.fn(),
     },
+    ledgerAccount: {
+      upsert: jest.fn(),
+      update: jest.fn(),
+    },
+    financialTransaction: {
+      findUnique: jest.fn(),
+      create: jest.fn(),
+    },
+    ledgerEntry: {
+      create: jest.fn(),
+    },
+    wallet: {
+      upsert: jest.fn(),
+      update: jest.fn(),
+    },
+    walletTransaction: {
+      create: jest.fn(),
+    },
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockPrisma.$transaction.mockImplementation((callback: any) => callback(mockPrisma));
+    mockPrisma.financialTransaction.findUnique.mockResolvedValue(null);
+    mockPrisma.financialTransaction.create.mockImplementation(({ data }: any) => Promise.resolve({ id: `ft-${data.reference}`, ...data }));
+    mockPrisma.ledgerAccount.upsert.mockResolvedValue({ id: 'acct-1', balance: { toString: () => '0.00' } });
+    mockPrisma.ledgerAccount.update.mockResolvedValue({ id: 'acct-1', balance: { toString: () => '500.00' } });
+    mockPrisma.ledgerEntry.create.mockResolvedValue({});
+    mockPrisma.wallet.upsert.mockResolvedValue({ id: 'wallet-1', balance: { toString: () => '0.00' } });
+    mockPrisma.wallet.update.mockResolvedValue({ id: 'wallet-1', balance: { toString: () => '400.00' } });
+    mockPrisma.walletTransaction.create.mockResolvedValue({});
     paymentsService = new PaymentsService(mockPrisma as any);
   });
 
@@ -72,6 +100,62 @@ describe('PaymentsService ownership & isolation', () => {
       const result = await paymentsService.initiateMockPayment('rider-1', 'trip-1');
       expect(result.status).toBe('PENDING');
       expect(mockPrisma.payment.create).toHaveBeenCalled();
+      expect(mockPrisma.financialTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ eventType: 'RIDER_PAYMENT_PENDING' }),
+        })
+      );
+    });
+  });
+
+  describe('capturePaymentForTrip', () => {
+    it('captures payment, records commission, driver earning, pending payout, and audit in one transaction', async () => {
+      mockPrisma.payment.findUnique.mockResolvedValue({
+        id: 'pay-1',
+        tripId: 'trip-1',
+        amount: { toString: () => '500.00' },
+        currency: 'NGN',
+        status: 'AUTHORIZED',
+        provider: 'mock-paystack',
+      });
+      mockPrisma.payment.update.mockResolvedValue({ id: 'pay-1', status: 'CAPTURED' });
+      mockPrisma.driverProfile.findUnique.mockResolvedValue({ userId: 'driver-user-1' });
+      mockPrisma.payout.create.mockResolvedValue({
+        id: 'payout-1',
+        amount: { toString: () => '400.00' },
+        currency: 'NGN',
+      });
+
+      await paymentsService.capturePaymentForTrip('trip-1', 'driver-prof-1');
+
+      expect(mockPrisma.$transaction).toHaveBeenCalled();
+      expect(mockPrisma.payment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'pay-1' },
+          data: expect.objectContaining({ status: 'CAPTURED' }),
+        })
+      );
+      expect(mockPrisma.payout.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ amount: '400.00', status: 'PENDING' }),
+        })
+      );
+      expect(mockPrisma.financialTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ eventType: 'PLATFORM_COMMISSION_RECORDED', amount: '100.00' }),
+        })
+      );
+      expect(mockPrisma.financialTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ eventType: 'DRIVER_EARNING_RECORDED', amount: '400.00' }),
+        })
+      );
+      expect(mockPrisma.financialTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ eventType: 'DRIVER_PAYOUT_PENDING', amount: '400.00' }),
+        })
+      );
+      expect(mockPrisma.auditLog.create).toHaveBeenCalled();
     });
   });
 
@@ -138,6 +222,7 @@ describe('AdminService.approvePayout state validation', () => {
   let adminService: AdminService;
 
   const mockPrisma: any = {
+    $transaction: jest.fn((callback) => callback(mockPrisma)),
     payout: {
       findUnique: jest.fn(),
       update: jest.fn(),
@@ -145,10 +230,37 @@ describe('AdminService.approvePayout state validation', () => {
     auditLog: {
       create: jest.fn(),
     },
+    ledgerAccount: {
+      upsert: jest.fn(),
+      update: jest.fn(),
+    },
+    financialTransaction: {
+      findUnique: jest.fn(),
+      create: jest.fn(),
+    },
+    ledgerEntry: {
+      create: jest.fn(),
+    },
+    wallet: {
+      upsert: jest.fn(),
+      update: jest.fn(),
+    },
+    walletTransaction: {
+      create: jest.fn(),
+    },
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockPrisma.$transaction.mockImplementation((callback: any) => callback(mockPrisma));
+    mockPrisma.financialTransaction.findUnique.mockResolvedValue(null);
+    mockPrisma.financialTransaction.create.mockImplementation(({ data }: any) => Promise.resolve({ id: `ft-${data.reference}`, ...data }));
+    mockPrisma.ledgerAccount.upsert.mockResolvedValue({ id: 'acct-1', balance: { toString: () => '0.00' } });
+    mockPrisma.ledgerAccount.update.mockResolvedValue({ id: 'acct-1', balance: { toString: () => '400.00' } });
+    mockPrisma.ledgerEntry.create.mockResolvedValue({});
+    mockPrisma.wallet.upsert.mockResolvedValue({ id: 'wallet-1', balance: { toString: () => '400.00' } });
+    mockPrisma.wallet.update.mockResolvedValue({ id: 'wallet-1', balance: { toString: () => '0.00' } });
+    mockPrisma.walletTransaction.create.mockResolvedValue({});
     adminService = new AdminService(mockPrisma as any);
   });
 
@@ -174,7 +286,13 @@ describe('AdminService.approvePayout state validation', () => {
   });
 
   it('approves a PENDING payout and logs the action', async () => {
-    mockPrisma.payout.findUnique.mockResolvedValue({ id: 'payout-1', status: 'PENDING' });
+    mockPrisma.payout.findUnique.mockResolvedValue({
+      id: 'payout-1',
+      status: 'PENDING',
+      amount: { toString: () => '400.00' },
+      currency: 'NGN',
+      driverProfile: { userId: 'driver-user-1' },
+    });
     mockPrisma.payout.update.mockResolvedValue({ id: 'payout-1', status: 'PAID' });
     mockPrisma.auditLog.create.mockResolvedValue({});
 
@@ -186,11 +304,23 @@ describe('AdminService.approvePayout state validation', () => {
         data: expect.objectContaining({ status: 'PAID' }),
       })
     );
+    expect(mockPrisma.financialTransaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ eventType: 'DRIVER_PAYOUT_PAID', amount: '400.00' }),
+      })
+    );
+    expect(mockPrisma.walletTransaction.create).toHaveBeenCalled();
     expect(mockPrisma.auditLog.create).toHaveBeenCalled();
   });
 
   it('approves a PROCESSING payout', async () => {
-    mockPrisma.payout.findUnique.mockResolvedValue({ id: 'payout-1', status: 'PROCESSING' });
+    mockPrisma.payout.findUnique.mockResolvedValue({
+      id: 'payout-1',
+      status: 'PROCESSING',
+      amount: { toString: () => '400.00' },
+      currency: 'NGN',
+      driverProfile: { userId: 'driver-user-1' },
+    });
     mockPrisma.payout.update.mockResolvedValue({ id: 'payout-1', status: 'PAID' });
     mockPrisma.auditLog.create.mockResolvedValue({});
 
