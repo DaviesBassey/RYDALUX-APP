@@ -1,0 +1,753 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserType {
+  RIDER
+  DRIVER
+  ADMIN
+}
+
+enum TripStatus {
+  DRAFT
+  QUOTED
+  REQUESTED
+  DRIVER_ASSIGNED
+  DRIVER_ARRIVING
+  DRIVER_ARRIVED
+  PIN_VERIFIED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED_BY_RIDER
+  CANCELLED_BY_DRIVER
+  EXPIRED
+  DISPUTED
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum KycStatus {
+  PENDING
+  SUBMITTED
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  CANCELLED
+}
+
+enum DocumentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum DriverStatus {
+  OFFLINE
+  AVAILABLE
+  UNAVAILABLE
+  ON_TRIP
+  SUSPENDED
+}
+
+enum VehicleStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  MAINTENANCE
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+}
+
+enum SupportStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  OPEN
+  INVESTIGATING
+  RESOLVED
+  CLOSED
+}
+
+enum SosEventType {
+  PANIC
+  SAFETY_CHECK
+  MEDICAL
+}
+
+enum SosStatus {
+  TRIGGERED
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum PromoType {
+  PERCENTAGE
+  FIXED_AMOUNT
+  FREE_RIDE
+}
+
+enum ZoneType {
+  URBAN
+  SUBURBAN
+  INDUSTRIAL
+  AIRPORT
+}
+
+enum ServiceType {
+  REGULAR
+  PREMIUM
+  SHIPMENT
+  SCHEDULED
+}
+
+model User {
+  id               String         @id @default(uuid()) @db.Uuid
+  email            String         @unique
+  phone            String?        @unique
+  passwordHash     String?
+  firstName        String?
+  lastName         String?
+  displayName      String?
+  userType         UserType       @default(RIDER)
+  isEmailVerified  Boolean        @default(false)
+  isPhoneVerified  Boolean        @default(false)
+  preferredLanguage String?
+  emergencyContactName String?
+  emergencyContactPhone String?
+  emergencyContactRelationship String?
+  paymentMethod    Json?
+  selfieVerificationStatus String?
+  selfieVerificationRequestedAt DateTime?
+  lastLoginAt      DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  deletedAt        DateTime?
+
+  riderProfile     RiderProfile?
+  driverProfile    DriverProfile?
+  wallet           Wallet?
+  supportTickets   SupportTicket[]
+  trustedContacts  TrustedContact[]
+  ratingsGiven     Rating[]       @relation("riderRatings")
+  ratingsReceived  Rating[]       @relation("driverRatings")
+  auditLogs        AuditLog[]     @relation("actorAuditLogs")
+  adminUser        AdminUser?
+  userRoles        UserRole[]
+  kycChecks        KycCheck[]
+  reviewedKycChecks KycCheck[]    @relation("kycReviewedBy")
+  driverDocuments  DriverDocument[] @relation("driverDocumentOwner")
+  payments         Payment[]
+  incidentReports  IncidentReport[]
+  sosEvents        SosEvent[]
+  devices          Device[]
+  sessions         AuthSession[]
+  accountDeletionRequests AccountDeletionRequest[]
+}
+
+model RiderProfile {
+  id                String     @id @default(uuid()) @db.Uuid
+  user              User       @relation(fields: [userId], references: [id])
+  userId            String     @unique @db.Uuid
+  defaultPaymentMethod String?
+  preferredPickupMode String?
+  favoriteLocations  Json?
+  cityZoneId         String?    @db.Uuid
+  isActive           Boolean    @default(true)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  deletedAt          DateTime?
+
+  trips              Trip[]
+}
+
+model DriverProfile {
+  id                    String      @id @default(uuid()) @db.Uuid
+  user                  User        @relation(fields: [userId], references: [id])
+  userId                String      @unique @db.Uuid
+  licenseNumber         String?
+  licensePlate          String?
+  licenseExpiry         DateTime?
+  homeCity              String?
+  currentLatitude       Float?
+  currentLongitude      Float?
+  currentLocation       Unsupported("geography(Point,4326)")?
+  lastLocationUpdatedAt DateTime?
+  currentStatus         DriverStatus @default(OFFLINE)
+  isOnline              Boolean     @default(false)
+  averageRating         Decimal?    @db.Decimal(3,2)
+  activeVehicleId       String?     @db.Uuid
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  deletedAt             DateTime?
+
+  vehicles              Vehicle[]   @relation("DriverVehicles")
+  payouts               Payout[]
+  driverDocuments       DriverDocument[] @relation("driverProfileDocuments")
+  trips                 Trip[]
+  activeVehicle         Vehicle?    @relation("ActiveDriverVehicle", fields: [activeVehicleId], references: [id])
+
+  @@index([currentStatus, isOnline])
+}
+
+model Vehicle {
+  id               String        @id @default(uuid()) @db.Uuid
+  driverProfile    DriverProfile @relation("DriverVehicles", fields: [driverProfileId], references: [id])
+  driverProfileId  String        @db.Uuid
+  registrationNumber String      @unique
+  make             String
+  model            String
+  year             Int
+  color            String
+  capacity         Int
+  vehicleType      String
+  status           VehicleStatus @default(ACTIVE)
+  approvedAt       DateTime?
+  verifiedAt       DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  deletedAt        DateTime?
+
+  documents        VehicleDocument[]
+  activeForDrivers DriverProfile[] @relation("ActiveDriverVehicle")
+  trips            Trip[]
+
+  @@index([driverProfileId, status])
+}
+
+model DriverDocument {
+  id           String         @id @default(uuid()) @db.Uuid
+  user         User           @relation("driverDocumentOwner", fields: [userId], references: [id])
+  userId       String         @db.Uuid
+  driverProfile DriverProfile @relation("driverProfileDocuments", fields: [userId], references: [userId], map: "DriverDocument_driverProfileUserId_fkey")
+  documentType String
+  status       DocumentStatus @default(PENDING)
+  documentUrl  String
+  issuedAt     DateTime?
+  expiresAt    DateTime?
+  verifiedAt   DateTime?
+  metadata     Json?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  deletedAt    DateTime?
+
+  @@index([userId, status])
+}
+
+model VehicleDocument {
+  id           String         @id @default(uuid()) @db.Uuid
+  vehicle      Vehicle        @relation(fields: [vehicleId], references: [id])
+  vehicleId    String         @db.Uuid
+  documentType String
+  status       DocumentStatus @default(PENDING)
+  documentUrl  String
+  issuedAt     DateTime?
+  expiresAt    DateTime?
+  verifiedAt   DateTime?
+  metadata     Json?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  deletedAt    DateTime?
+
+  @@index([vehicleId, status])
+}
+
+model KycCheck {
+  id            String    @id @default(uuid()) @db.Uuid
+  user          User      @relation(fields: [userId], references: [id])
+  userId        String    @db.Uuid
+  status        KycStatus @default(PENDING)
+  provider      String?
+  submittedAt   DateTime  @default(now())
+  reviewedAt    DateTime?
+  reviewedById  String?   @db.Uuid
+  result        Json?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  reviewedBy    User?     @relation("kycReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([userId, status])
+}
+
+model Trip {
+  id                 String        @id @default(uuid()) @db.Uuid
+  reference          String        @unique
+  riderProfile       RiderProfile  @relation(fields: [riderProfileId], references: [id])
+  riderProfileId     String        @db.Uuid
+  driverProfile      DriverProfile? @relation(fields: [driverProfileId], references: [id])
+  driverProfileId    String?        @db.Uuid
+  vehicle            Vehicle?      @relation(fields: [vehicleId], references: [id])
+  vehicleId          String?       @db.Uuid
+  serviceType        ServiceType   @default(REGULAR)
+  status             TripStatus    @default(REQUESTED)
+  pickupAddress      String
+  dropoffAddress     String
+  pickupLatitude     Float
+  pickupLongitude    Float
+  pickupLocation     Unsupported("geography(Point,4326)")?
+  dropoffLatitude    Float
+  dropoffLongitude   Float
+  dropoffLocation    Unsupported("geography(Point,4326)")?
+  scheduledAt        DateTime?
+  acceptedAt         DateTime?
+  startedAt          DateTime?
+  arrivedAt          DateTime?
+  completedAt        DateTime?
+  cancelledAt        DateTime?
+  cancellationReason String?
+  distanceMeters     Int?
+  durationSeconds    Int?
+  notes              String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  // PIN verification fields
+  pinCode            String?       
+  pinExpiresAt       DateTime?
+  failedPinAttempts  Int           @default(0)
+  safetyFlagged      Boolean       @default(false)
+
+  fareQuote          FareQuote?
+  payment            Payment?
+  events             TripEvent[]
+  locations          TripLocation[]
+  incidentReport     IncidentReport?
+  rating             Rating?
+  sosEvents          SosEvent[]
+  promoCode          PromoCode?    @relation(fields: [promoCodeId], references: [id])
+  promoCodeId        String?       @db.Uuid
+
+  @@index([status, scheduledAt])
+  @@index([driverProfileId, status])
+  @@index([riderProfileId, status])
+  @@index([pickupLatitude, pickupLongitude])
+  @@index([dropoffLatitude, dropoffLongitude])
+}
+
+model TripEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  trip       Trip     @relation(fields: [tripId], references: [id])
+  tripId     String   @db.Uuid
+  eventType  String
+  metadata   Json?
+  occurredAt DateTime @default(now())
+
+  @@index([tripId, occurredAt])
+}
+
+model TripLocation {
+  id          String   @id @default(uuid()) @db.Uuid
+  trip        Trip     @relation(fields: [tripId], references: [id])
+  tripId      String   @db.Uuid
+  latitude    Float
+  longitude   Float
+  location    Unsupported("geography(Point,4326)")?
+  recordedAt  DateTime @default(now())
+
+  @@index([tripId, recordedAt])
+}
+
+model FareQuote {
+  id            String   @id @default(uuid()) @db.Uuid
+  trip          Trip?    @relation(fields: [tripId], references: [id])
+  tripId        String?  @unique @db.Uuid
+  serviceType   ServiceType
+  baseFare      Decimal  @db.Decimal(12,2)
+  distanceFare  Decimal  @db.Decimal(12,2)
+  timeFare      Decimal  @db.Decimal(12,2)
+  surgeFactor   Decimal  @db.Decimal(5,2) @default(1.00)
+  taxAmount     Decimal  @db.Decimal(12,2) @default(0.00)
+  extraFees     Decimal  @db.Decimal(12,2) @default(0.00)
+  totalFare     Decimal  @db.Decimal(12,2)
+  pickupLatitude  Float
+  pickupLongitude Float
+  dropoffLatitude Float
+  dropoffLongitude Float
+  scheduledAt     DateTime?
+  expiresAt       DateTime?
+  bookingFee      Decimal @db.Decimal(12,2) @default("0.00")
+  minimumFare     Decimal @db.Decimal(12,2) @default("0.00")
+  promoCode       PromoCode? @relation(fields: [promoCodeId], references: [id])
+  promoCodeId     String?  @db.Uuid
+  status          String   @default("ACTIVE")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Payment {
+  id             String        @id @default(uuid()) @db.Uuid
+  user           User          @relation(fields: [userId], references: [id])
+  userId         String        @db.Uuid
+  trip           Trip?         @relation(fields: [tripId], references: [id])
+  tripId         String?       @unique @db.Uuid
+  amount         Decimal       @db.Decimal(12,2)
+  currency       String        @default("NGN")
+  provider       String
+  providerMethod String?
+  status         PaymentStatus @default(PENDING)
+  reference      String        @unique
+  externalId     String?
+  gatewayMeta    Json?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([status, provider])
+  @@index([userId, createdAt])
+}
+
+model Wallet {
+  id         String    @id @default(uuid()) @db.Uuid
+  user       User      @relation(fields: [userId], references: [id])
+  userId     String    @unique @db.Uuid
+  balance    Decimal   @db.Decimal(18,2) @default(0.00)
+  currency   String    @default("NGN")
+  isBlocked  Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  ledgerEntries LedgerEntry[]
+}
+
+model LedgerEntry {
+  id            String          @id @default(uuid()) @db.Uuid
+  wallet        Wallet          @relation(fields: [walletId], references: [id])
+  walletId      String          @db.Uuid
+  transactionType TransactionType
+  amount        Decimal         @db.Decimal(18,2)
+  balanceAfter  Decimal         @db.Decimal(18,2)
+  referenceType String
+  referenceId   String?
+  description   String?
+  createdAt     DateTime        @default(now())
+
+  @@index([walletId, createdAt])
+}
+
+model Payout {
+  id                String        @id @default(uuid()) @db.Uuid
+  driverProfile     DriverProfile @relation(fields: [driverProfileId], references: [id])
+  driverProfileId   String        @db.Uuid
+  amount            Decimal       @db.Decimal(18,2)
+  currency          String        @default("NGN")
+  status            PayoutStatus  @default(PENDING)
+  provider          String
+  providerReference String?
+  scheduledAt       DateTime?
+  processedAt       DateTime?
+  failedAt          DateTime?
+  notes             String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([driverProfileId, status])
+}
+
+model Rating {
+  id          String   @id @default(uuid()) @db.Uuid
+  trip        Trip     @relation(fields: [tripId], references: [id])
+  tripId      String   @unique @db.Uuid
+  rider       User     @relation("riderRatings", fields: [riderId], references: [id])
+  riderId     String   @db.Uuid
+  driver      User     @relation("driverRatings", fields: [driverId], references: [id])
+  driverId    String   @db.Uuid
+  score       Int
+  comment     String?
+  createdAt   DateTime @default(now())
+
+  @@index([driverId, createdAt])
+}
+
+model SupportTicket {
+  id            String        @id @default(uuid()) @db.Uuid
+  user          User          @relation(fields: [userId], references: [id])
+  userId        String        @db.Uuid
+  assignedTo    AdminUser?    @relation(fields: [assignedToId], references: [id])
+  assignedToId  String?       @db.Uuid
+  subject       String
+  description   String
+  status        SupportStatus @default(OPEN)
+  priority      String?
+  resolution    String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime?
+
+  @@index([userId, status])
+}
+
+model IncidentReport {
+  id            String           @id @default(uuid()) @db.Uuid
+  trip          Trip             @relation(fields: [tripId], references: [id])
+  tripId        String           @unique @db.Uuid
+  reportedBy    User             @relation(fields: [reportedById], references: [id])
+  reportedById  String           @db.Uuid
+  severity      IncidentSeverity
+  status        IncidentStatus   @default(OPEN)
+  description   String
+  resolvedAt    DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([tripId, status])
+}
+
+model SosEvent {
+  id          String     @id @default(uuid()) @db.Uuid
+  user        User       @relation(fields: [userId], references: [id])
+  userId      String     @db.Uuid
+  trip        Trip?      @relation(fields: [tripId], references: [id])
+  tripId      String?    @db.Uuid
+  type        SosEventType
+  status      SosStatus  @default(TRIGGERED)
+  latitude    Float
+  longitude   Float
+  location    Unsupported("geography(Point,4326)")?
+  notes       String?
+  triggeredAt DateTime   @default(now())
+  resolvedAt  DateTime?
+
+  @@index([userId, status, triggeredAt])
+}
+
+model TrustedContact {
+  id            String    @id @default(uuid()) @db.Uuid
+  user          User      @relation(fields: [userId], references: [id])
+  userId        String    @db.Uuid
+  name          String
+  phone         String
+  relationship  String?
+  isVerified    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+model AccountDeletionRequest {
+  id          String   @id @default(uuid()) @db.Uuid
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String   @db.Uuid
+  reason      String?
+  status      AccountDeletionStatus @default(PENDING)
+  requestedAt DateTime @default(now())
+  processedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, status])
+}
+
+enum AccountDeletionStatus {
+  PENDING
+  REVIEWED
+  COMPLETED
+  REJECTED
+}
+
+model PromoCode {
+  id             String    @id @default(uuid()) @db.Uuid
+  code           String    @unique
+  promoType      PromoType
+  discountValue  Decimal   @db.Decimal(12,2)
+  description    String?
+  maxUses        Int?
+  usedCount      Int       @default(0)
+  startsAt       DateTime
+  endsAt         DateTime
+  minSpend       Decimal?  @db.Decimal(12,2)
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+  trips          Trip[]
+  fareQuotes     FareQuote[]
+
+  @@index([code, isActive])
+}
+
+model AdminUser {
+  id        String   @id @default(uuid()) @db.Uuid
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String   @unique @db.Uuid
+  role      Role     @relation(fields: [roleId], references: [id])
+  roleId    String   @db.Uuid
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  assignedSupportTickets SupportTicket[]
+}
+
+model Role {
+  id           String           @id @default(uuid()) @db.Uuid
+  name         String           @unique
+  description  String?
+  permissions  RolePermission[]
+  userRoles    UserRole[]
+  adminUsers   AdminUser[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+}
+
+model Permission {
+  id           String           @id @default(uuid()) @db.Uuid
+  name         String           @unique
+  description  String?
+  rolePermissions RolePermission[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+}
+
+model UserRole {
+  id        String   @id @default(uuid()) @db.Uuid
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String   @db.Uuid
+  role      Role     @relation(fields: [roleId], references: [id])
+  roleId    String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  @@unique([userId, roleId])
+}
+
+model RolePermission {
+  id           String     @id @default(uuid()) @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id])
+  roleId       String     @db.Uuid
+  permission   Permission @relation(fields: [permissionId], references: [id])
+  permissionId String     @db.Uuid
+  createdAt    DateTime   @default(now())
+
+  @@unique([roleId, permissionId])
+}
+
+model OtpRequest {
+  id           String   @id @default(uuid()) @db.Uuid
+  phone        String
+  codeHash     String
+  attempts     Int      @default(0)
+  expiresAt    DateTime
+  usedAt       DateTime?
+  deviceId     String?  @db.Uuid
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([phone, expiresAt])
+}
+
+model Device {
+  id            String    @id @default(uuid()) @db.Uuid
+  user          User      @relation(fields: [userId], references: [id])
+  userId        String    @db.Uuid
+  fingerprint   String    @unique
+  deviceName    String?
+  userAgent     String?
+  ipAddress     String?
+  isActive      Boolean   @default(true)
+  lastSeenAt    DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions      AuthSession[]
+
+  @@index([userId, isActive])
+}
+
+model AuthSession {
+  id               String    @id @default(uuid()) @db.Uuid
+  user             User      @relation(fields: [userId], references: [id])
+  userId           String    @db.Uuid
+  device           Device?   @relation(fields: [deviceId], references: [id])
+  deviceId         String?   @db.Uuid
+  refreshTokenHash String    @unique
+  ipAddress        String?
+  userAgent        String?
+  issuedAt         DateTime  @default(now())
+  lastUsedAt       DateTime  @default(now())
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  reasonRevoked    String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([userId, revokedAt])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actor      User?    @relation("actorAuditLogs", fields: [actorId], references: [id])
+  actorId    String?  @db.Uuid
+  action     String
+  entity     String
+  entityId   String
+  payload    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId, createdAt])
+}
+
+model CityZone {
+  id               String     @id @default(uuid()) @db.Uuid
+  name             String
+  city             String
+  zoneType         ZoneType
+  centerLatitude   Float
+  centerLongitude  Float
+  boundary         Unsupported("geography(MultiPolygon,4326)")?
+  isActive         Boolean    @default(true)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  deletedAt        DateTime?
+  geofences        Geofence[]
+
+  @@index([city, zoneType])
+}
+
+model Geofence {
+  id          String    @id @default(uuid()) @db.Uuid
+  cityZone    CityZone  @relation(fields: [cityZoneId], references: [id])
+  cityZoneId  String    @db.Uuid
+  name        String
+  category    String?
+  area        Unsupported("geography(Polygon,4326)")?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([cityZoneId, isActive])
+}

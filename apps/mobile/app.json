@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "Rydalux Mobile",
+    "slug": "rydalux-mobile",
+    "version": "1.0.0",
+    "platforms": ["android", "ios", "web"],
+    "sdkVersion": "49.0.0",
+    "assetBundlePatterns": ["**/*"]
+  }
+}

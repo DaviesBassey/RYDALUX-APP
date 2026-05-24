@@ -1,0 +1,15 @@
+{
+  "name": "@rydulux/prisma",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "generate": "prisma generate",
+    "migrate": "prisma migrate dev"
+  },
+  "devDependencies": {
+    "prisma": "^5.13.0"
+  },
+  "dependencies": {
+    "@prisma/client": "5.22.0"
+  }
+}
