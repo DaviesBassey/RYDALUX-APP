@@ -24,11 +24,11 @@ function DashboardShell({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#f3f4f6' }}>
-      <aside style={{ width: 240, background: '#fff', borderRight: '1px solid #e5e7eb', padding: '24px 0', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#f4f1eb' }}>
+      <aside style={{ width: 248, background: '#111111', borderRight: '1px solid #2b2418', padding: '24px 0', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '0 24px 24px' }}>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, letterSpacing: -0.5 }}>Rydalux Admin</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6b7280' }}>Operations Console</p>
+          <img src="/brand/rydalux-logo-white.png" alt="Rydalux" style={{ display: 'block', width: 160, height: 'auto' }} />
+          <p style={{ margin: '8px 0 0', fontSize: 12, color: '#d2b16d' }}>Operations Console</p>
         </div>
         <nav style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {NAV.map((item) => {
@@ -41,10 +41,10 @@ function DashboardShell({ children }: { children: ReactNode }) {
                   padding: '10px 24px',
                   fontSize: 14,
                   fontWeight: active ? 600 : 500,
-                  color: active ? '#111827' : '#4b5563',
-                  background: active ? '#f3f4f6' : 'transparent',
+                  color: active ? '#111111' : '#d8d2c6',
+                  background: active ? '#d2b16d' : 'transparent',
                   textDecoration: 'none',
-                  borderRight: active ? '3px solid #111827' : '3px solid transparent',
+                  borderRight: active ? '3px solid #ffffff' : '3px solid transparent',
                 }}
               >
                 {item.label}
@@ -59,9 +59,9 @@ function DashboardShell({ children }: { children: ReactNode }) {
               width: '100%',
               padding: '10px',
               borderRadius: 8,
-              border: '1px solid #e5e7eb',
-              background: '#fff',
-              color: '#374151',
+              border: '1px solid #3a3122',
+              background: '#1b1b1b',
+              color: '#f8f3e8',
               fontSize: 14,
               fontWeight: 500,
               cursor: 'pointer',

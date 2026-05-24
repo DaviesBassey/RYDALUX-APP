@@ -3,6 +3,7 @@
     "name": "Rydalux Mobile",
     "slug": "rydalux-mobile",
     "version": "1.0.0",
+    "icon": "./assets/brand/rydalux-icon-light.png",
     "platforms": ["android", "ios", "web"],
     "sdkVersion": "49.0.0",
     "assetBundlePatterns": ["**/*"]

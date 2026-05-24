@@ -34,10 +34,15 @@ export default function LoginPage() {
   }
 
   return (
-    <main style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f3f4f6' }}>
-      <div style={{ width: '100%', maxWidth: 400, padding: 32, background: '#fff', borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-        <h1 style={{ margin: '0 0 8px', fontSize: 24, fontWeight: 700 }}>Rydalux Admin</h1>
-        <p style={{ margin: '0 0 24px', color: '#6b7280' }}>Sign in to the operations dashboard</p>
+    <main style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f4f1eb' }}>
+      <div style={{ width: '100%', maxWidth: 420, padding: 32, background: '#fff', borderRadius: 10, boxShadow: '0 18px 48px rgba(17, 24, 39, 0.12)', border: '1px solid #eadfce' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24 }}>
+          <img src="/brand/rydalux-icon-light.png" alt="" style={{ width: 48, height: 48, borderRadius: 12 }} />
+          <div>
+            <img src="/brand/rydalux-logo-black.png" alt="Rydalux" style={{ display: 'block', width: 154, height: 'auto' }} />
+            <p style={{ margin: '4px 0 0', color: '#6b5d45', fontSize: 13 }}>Operations dashboard</p>
+          </div>
+        </div>
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>Email</label>
@@ -63,7 +68,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            style={{ width: '100%', padding: '12px', borderRadius: 8, border: 'none', background: '#111827', color: '#fff', fontSize: 14, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}
+            style={{ width: '100%', padding: '12px', borderRadius: 8, border: 'none', background: '#111111', color: '#fff', fontSize: 14, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}
           >
             {loading ? 'Signing in…' : 'Sign In'}
           </button>

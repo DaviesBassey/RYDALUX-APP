@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -47,7 +48,10 @@ export default function PhoneScreen() {
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <View style={styles.container}>
-          <Text style={styles.brand}>Rydalux</Text>
+          <View style={styles.brandBlock}>
+            <Image source={require('../../../assets/brand/rydalux-icon-light.png')} style={styles.brandIcon} />
+            <Image source={require('../../../assets/brand/rydalux-logo-black.png')} style={styles.brandLogo} resizeMode="contain" />
+          </View>
           <Text style={styles.heading}>Enter your phone number</Text>
           <Text style={styles.sub}>We'll send a one-time code to verify your number.</Text>
 
@@ -89,12 +93,14 @@ export default function PhoneScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#fff' },
+  safe: { flex: 1, backgroundColor: '#f4f1eb' },
   flex: { flex: 1 },
   container: { flex: 1, justifyContent: 'center', padding: 28 },
-  brand: { fontSize: 32, fontWeight: '800', color: '#e94560', marginBottom: 32 },
+  brandBlock: { marginBottom: 32 },
+  brandIcon: { width: 58, height: 58, borderRadius: 14, marginBottom: 14 },
+  brandLogo: { width: 176, height: 28 },
   heading: { fontSize: 22, fontWeight: '700', color: '#1a1a2e', marginBottom: 8 },
-  sub: { fontSize: 14, color: '#666', marginBottom: 20, lineHeight: 20 },
+  sub: { fontSize: 14, color: '#6b5d45', marginBottom: 20, lineHeight: 20 },
   toggle: {
     flexDirection: 'row',
     borderWidth: 1.5,
@@ -109,7 +115,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#fafafa',
   },
-  toggleBtnActive: { backgroundColor: '#e94560' },
+  toggleBtnActive: { backgroundColor: '#111111' },
   toggleText: { fontSize: 15, fontWeight: '600', color: '#888' },
   toggleTextActive: { color: '#fff' },
   input: {
@@ -122,9 +128,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     backgroundColor: '#fafafa',
   },
-  error: { color: '#e94560', fontSize: 13, marginBottom: 12 },
+  error: { color: '#b42318', fontSize: 13, marginBottom: 12 },
   btn: {
-    backgroundColor: '#e94560',
+    backgroundColor: '#111111',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',

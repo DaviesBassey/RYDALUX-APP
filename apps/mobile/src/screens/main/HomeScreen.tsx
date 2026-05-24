@@ -8,6 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -132,7 +133,7 @@ export default function HomeScreen() {
 
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.brand}>Rydalux</Text>
+          <Image source={require('../../../assets/brand/rydalux-logo-black.png')} style={styles.brandLogo} resizeMode="contain" />
           <TouchableOpacity onPress={handleLogout}>
             <Text style={styles.logoutText}>Log out</Text>
           </TouchableOpacity>
@@ -218,7 +219,7 @@ export default function HomeScreen() {
           disabled={quoteLoading || bookLoading}
         >
           {quoteLoading
-            ? <ActivityIndicator color="#e94560" />
+            ? <ActivityIndicator color="#111111" />
             : <Text style={styles.btnTextSecondary}>{fareQuote ? 'Refresh Quote' : 'Get Fare Quote'}</Text>}
         </TouchableOpacity>
 
@@ -239,11 +240,11 @@ function QuoteRow({ label, value, accent }: { label: string; value: number; acce
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#fff' },
+  safe: { flex: 1, backgroundColor: '#f4f1eb' },
   scroll: { padding: 20, paddingBottom: 80 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  brand: { fontSize: 26, fontWeight: '800', color: '#e94560' },
-  logoutText: { color: '#888', fontSize: 14 },
+  brandLogo: { width: 148, height: 24 },
+  logoutText: { color: '#6b5d45', fontSize: 14 },
   sectionTitle: { fontSize: 20, fontWeight: '700', color: '#1a1a2e', marginBottom: 20 },
   label: { fontSize: 12, fontWeight: '600', color: '#555', marginBottom: 6, marginTop: 14, textTransform: 'uppercase', letterSpacing: 0.5 },
   input: {
@@ -268,10 +269,10 @@ const styles = StyleSheet.create({
     marginRight: 8,
     marginTop: 8,
   },
-  chipActive: { backgroundColor: '#e94560', borderColor: '#e94560' },
+  chipActive: { backgroundColor: '#111111', borderColor: '#111111' },
   chipText: { fontSize: 13, color: '#555', fontWeight: '600' },
   chipTextActive: { color: '#fff' },
-  error: { color: '#e94560', fontSize: 13, marginTop: 10 },
+  error: { color: '#b42318', fontSize: 13, marginTop: 10 },
   quoteCard: {
     backgroundColor: '#f7f7fb',
     borderRadius: 14,
@@ -288,9 +289,9 @@ const styles = StyleSheet.create({
   quoteAccent: { color: '#2ecc71' },
   quoteZone: { fontSize: 12, color: '#888', marginTop: 8 },
   divider: { height: 1, backgroundColor: '#e0e0e0', marginVertical: 10 },
-  btn: { backgroundColor: '#e94560', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 14 },
-  btnSecondary: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#e94560' },
+  btn: { backgroundColor: '#111111', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 14 },
+  btnSecondary: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#111111' },
   btnDisabled: { opacity: 0.6 },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  btnTextSecondary: { color: '#e94560', fontSize: 16, fontWeight: '700' },
+  btnTextSecondary: { color: '#111111', fontSize: 16, fontWeight: '700' },
 });

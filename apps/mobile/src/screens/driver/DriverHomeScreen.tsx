@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -135,7 +136,7 @@ export default function DriverHomeScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.center}>
-        <ActivityIndicator size="large" color="#e94560" />
+        <ActivityIndicator size="large" color="#111111" />
       </SafeAreaView>
     );
   }
@@ -143,7 +144,10 @@ export default function DriverHomeScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
-        <Text style={styles.title}>Driver</Text>
+        <View>
+          <Image source={require('../../../assets/brand/rydalux-logo-black.png')} style={styles.brandLogo} resizeMode="contain" />
+          <Text style={styles.title}>Driver Console</Text>
+        </View>
         <TouchableOpacity onPress={logout}>
           <Text style={styles.logout}>Logout</Text>
         </TouchableOpacity>
@@ -186,7 +190,7 @@ export default function DriverHomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f5f5f5' },
+  safe: { flex: 1, backgroundColor: '#f4f1eb' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
     flexDirection: 'row',
@@ -194,16 +198,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: '#fff',
+    backgroundColor: '#fffaf1',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
-  title: { fontSize: 20, fontWeight: '700', color: '#1a1a2e' },
-  logout: { color: '#e94560', fontSize: 14, fontWeight: '600' },
+  brandLogo: { width: 140, height: 22, marginBottom: 4 },
+  title: { fontSize: 12, fontWeight: '700', color: '#6b5d45', textTransform: 'uppercase', letterSpacing: 0.5 },
+  logout: { color: '#111111', fontSize: 14, fontWeight: '600' },
   section: { padding: 24, alignItems: 'center' },
   statusText: { fontSize: 16, color: '#555', marginBottom: 20, textAlign: 'center' },
   onlineBtn: {
-    backgroundColor: '#e94560',
+    backgroundColor: '#111111',
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 40,
@@ -213,7 +218,7 @@ const styles = StyleSheet.create({
   btnDisabled: { opacity: 0.6 },
   list: { padding: 16, gap: 12 },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: '#fffaf1',
     borderRadius: 14,
     padding: 16,
     shadowColor: '#000',
@@ -227,7 +232,7 @@ const styles = StyleSheet.create({
   fare: { fontSize: 16, fontWeight: '700', color: '#1a1a2e' },
   addr: { fontSize: 14, color: '#444', marginBottom: 4 },
   acceptBtn: {
-    backgroundColor: '#e94560',
+    backgroundColor: '#111111',
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: 'center',
