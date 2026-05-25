@@ -50,7 +50,6 @@ export default function PhoneScreen() {
         <View style={styles.container}>
           <View style={styles.brandBlock}>
             <Image source={require('../../../assets/brand/rydalux-icon-light.png')} style={styles.brandIcon} />
-            <Image source={require('../../../assets/brand/rydalux-logo-black.png')} style={styles.brandLogo} resizeMode="contain" />
           </View>
           <Text style={styles.heading}>Enter your phone number</Text>
           <Text style={styles.sub}>We'll send a one-time code to verify your number.</Text>
@@ -97,8 +96,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   container: { flex: 1, justifyContent: 'center', padding: 28 },
   brandBlock: { marginBottom: 32 },
-  brandIcon: { width: 58, height: 58, borderRadius: 14, marginBottom: 14 },
-  brandLogo: { width: 176, height: 28 },
+  brandIcon: { width: 58, height: 58, borderRadius: 14 },
   heading: { fontSize: 22, fontWeight: '700', color: '#1a1a2e', marginBottom: 8 },
   sub: { fontSize: 14, color: '#6b5d45', marginBottom: 20, lineHeight: 20 },
   toggle: {
