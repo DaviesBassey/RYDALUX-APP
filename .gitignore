@@ -27,3 +27,4 @@ ios
 .expo-shared
 
 *.log
+.playwright-mcp/
