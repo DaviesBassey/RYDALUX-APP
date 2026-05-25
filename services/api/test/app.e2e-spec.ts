@@ -12,7 +12,16 @@ describe('HealthController (e2e)', () => {
       imports: [AppModule]
     })
       .overrideProvider(PrismaService)
-      .useValue({ onModuleInit: async () => {}, $connect: async () => {}, $disconnect: async () => {} })
+      .useValue({
+        onModuleInit: async () => {},
+        $connect: async () => {},
+        $disconnect: async () => {},
+        $queryRaw: async () => [{ result: 1 }],
+      })
+      .overrideProvider('REDIS_CLIENT')
+      .useValue({
+        ping: async () => 'PONG',
+      })
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -25,8 +34,21 @@ describe('HealthController (e2e)', () => {
 
   it('/health (GET)', async () => {
     const response = await request(app.getHttpServer()).get('/health').expect(200);
-
     expect(response.body).toHaveProperty('status', 'ok');
     expect(response.body).toHaveProperty('timestamp');
+  });
+
+  it('/health/live (GET)', async () => {
+    const response = await request(app.getHttpServer()).get('/health/live').expect(200);
+    expect(response.body).toHaveProperty('status', 'ok');
+    expect(response.body).toHaveProperty('timestamp');
+  });
+
+  it('/health/ready (GET)', async () => {
+    const response = await request(app.getHttpServer()).get('/health/ready').expect(200);
+    expect(response.body).toHaveProperty('status', 'ok');
+    expect(response.body).toHaveProperty('checks');
+    expect(response.body.checks).toHaveProperty('database');
+    expect(response.body.checks).toHaveProperty('redis');
   });
 });

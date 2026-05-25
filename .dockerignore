@@ -1,0 +1,42 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Build outputs
+dist
+*.tsbuildinfo
+
+# Logs
+*.log
+.pnpm-debug.log*
+
+# Git
+.git
+.gitignore
+
+# OS
+.DS_Store
+
+# IDE
+.vscode
+.idea
+
+# Expo / React Native
+android
+ios
+.expo
+.expo-shared
+
+# Testing
+coverage
+
+# Docs (not needed at runtime)
+docs
+
+# Playwright
+.playwright-mcp

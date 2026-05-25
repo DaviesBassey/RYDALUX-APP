@@ -35,6 +35,16 @@ async function bootstrap() {
   const port = process.env.PORT ? Number(process.env.PORT) : 4000;
   await app.listen(port);
   console.log(`API listening on http://localhost:${port}`);
+
+  // Graceful shutdown
+  const signals = ['SIGTERM', 'SIGINT'] as const;
+  signals.forEach((signal) => {
+    process.on(signal, async () => {
+      console.log(`Received ${signal}, shutting down gracefully...`);
+      await app.close();
+      process.exit(0);
+    });
+  });
 }
 
 bootstrap();

@@ -1,40 +1,228 @@
-# Rydalux Monorepo
+# Rydalux
 
-A full-stack monorepo for mobile, backend, and admin dashboard using:
+Full-stack ride-hailing platform with parcel delivery, fintech, and safety features.
 
-- Expo React Native + TypeScript
-- NestJS + TypeScript backend API
-- Next.js + TypeScript admin dashboard
-- PostgreSQL + PostGIS with Prisma
-- Redis + BullMQ for queues and caching
-- Supabase Storage / S3-compatible storage
-- Custom auth and payments integration placeholders
+## Stack
+
+- **Mobile:** Expo React Native + TypeScript
+- **Backend API:** NestJS + TypeScript (`services/api`)
+- **Admin Dashboard:** Next.js + TypeScript (`apps/admin`)
+- **Database:** PostgreSQL + PostGIS with Prisma ORM
+- **Cache / Queue:** Redis + BullMQ
+- **Storage:** S3-compatible (placeholder — file upload pending)
+- **Payments:** Paystack + Flutterwave
 
 ## Workspaces
 
-- `apps/mobile` — Expo mobile app
-- `apps/api` — NestJS API service
-- `apps/admin` — Next.js admin dashboard
-- `packages/shared` — shared TypeScript types and helpers
-- `packages/prisma` — Prisma schema and database models
+- `apps/mobile` — Rider & Driver mobile app
+- `apps/admin` — Operations dashboard
+- `services/api` — NestJS API (all business logic)
+- `packages/prisma` — Database schema, migrations, Prisma client
+- `packages/shared` — Shared TypeScript types
 
-## Getting Started
+> **Note:** `apps/api` was a legacy boilerplate and has been removed. The active API is in `services/api`.
 
-1. Install dependencies:
+## Prerequisites
+
+- Node.js 20+
+- pnpm 9 (`npm install -g pnpm@9.0.0`)
+- Docker & Docker Compose (optional, for local infrastructure)
+
+## Local Development
+
+### 1. Install dependencies
 
 ```bash
 pnpm install
 ```
 
-2. Start development:
+### 2. Configure environment
 
 ```bash
-pnpm dev
+cp .env.example .env
+# Edit .env and fill in all required values
 ```
 
-## Local Services
+### 3. Start infrastructure services
 
-- PostgreSQL + PostGIS
-- Redis
+```bash
+docker-compose up -d
+```
 
-> Add local Docker support and environment `.env` files before running services.
+This starts PostgreSQL + PostGIS, Redis, and MinIO.
+
+### 4. Run database migrations
+
+```bash
+pnpm -C packages/prisma migrate deploy
+pnpm -C packages/prisma generate
+```
+
+### 5. Seed admin roles and permissions (optional)
+
+```bash
+pnpm -C services/api seed:admin
+```
+
+### 6. Start development servers
+
+```bash
+# All workspaces
+pnpm dev
+
+# Or individually:
+pnpm -C services/api start
+pnpm -C apps/admin dev
+pnpm -C apps/mobile start
+```
+
+## Production Deployment
+
+### Docker Compose (Recommended for Pilot)
+
+```bash
+# 1. Configure production environment
+cp .env.example .env
+# Edit .env:
+#   NODE_ENV=production
+#   POSTGRES_PASSWORD=<strong-password>
+#   JWT_ACCESS_SECRET=<32+ chars>
+#   JWT_REFRESH_SECRET=<32+ chars>
+#   CORS_ORIGIN=https://admin.yourdomain.com
+#   PAYSTACK_SECRET_KEY=sk_live_...
+#   PAYSTACK_WEBHOOK_SECRET=whsec_...
+
+# 2. Build and start all services
+docker-compose -f docker-compose.prod.yml up --build -d
+
+# 3. Run migrations
+# Exec into the API container or run locally:
+DATABASE_URL=postgresql://rydalux:<password>@localhost:5432/rydalux \
+  pnpm -C packages/prisma migrate deploy
+```
+
+### Services & Ports
+
+| Service | Port | Description |
+|---------|------|-------------|
+| API | 4000 | NestJS backend |
+| Admin | 3000 | Next.js static dashboard (nginx) |
+| PostgreSQL | internal only | Database |
+| Redis | internal only | Cache & queues |
+
+### Health Checks
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /health` | Basic status |
+| `GET /health/live` | Liveness probe (process running) |
+| `GET /health/ready` | Readiness probe (DB + Redis connected) |
+
+## Database Migrations
+
+**Development:**
+```bash
+pnpm -C packages/prisma migrate dev
+```
+
+**Production:**
+```bash
+# Must run before starting API
+pnpm -C packages/prisma migrate deploy
+pnpm -C packages/prisma generate
+```
+
+> Never run `migrate dev` in production. Always use `migrate deploy`.
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NODE_ENV` | Yes | `development` or `production` |
+| `PORT` | Yes | API listen port (default: 4000) |
+| `LOG_LEVEL` | No | `debug`, `info`, `warn`, `error` |
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `REDIS_URL` | Yes | Redis connection string |
+| `JWT_ACCESS_SECRET` | Yes | Min 32 characters |
+| `JWT_REFRESH_SECRET` | Yes | Min 32 characters |
+| `CORS_ORIGIN` | Prod only | Comma-separated allowed origins |
+| `PAYSTACK_SECRET_KEY` | Yes (payments) | Paystack live secret key |
+| `PAYSTACK_WEBHOOK_SECRET` | Yes (payments) | Webhook verification secret |
+| `FLUTTERWAVE_SECRET_KEY` | No | Flutterwave secret key |
+| `FINANCE_SCHEDULER_DISABLED` | No | `true` to disable reconciliation jobs |
+
+> The API validates all required secrets at startup and **crashes immediately** if anything is missing or weak in production.
+
+## Backup & Restore
+
+### PostgreSQL Backup
+
+```bash
+# Daily backup
+docker exec rydalux-postgres-1 pg_dump -U rydalux rydalux > backup-$(date +%Y%m%d).sql
+
+# Upload to S3 / Backblaze B2
+# Retention: 7 daily + 4 weekly
+```
+
+### PostgreSQL Restore
+
+```bash
+docker exec -i rydalux-postgres-1 psql -U rydalux rydalux < backup-20260101.sql
+```
+
+### Automated Backups (Deferred)
+
+- Point-in-time recovery (WAL archiving)
+- Cross-region replication
+- Automated backup verification
+
+These are recommended after pilot scale-up.
+
+## Architecture
+
+```
+┌─────────────┐     ┌─────────────┐
+│   Mobile    │────▶│  API (4000) │
+│  (Expo/RN)  │     │   NestJS    │
+└─────────────┘     └──────┬──────┘
+                           │
+      ┌────────────────────┼────────────────────┐
+      │                    │                    │
+      ▼                    ▼                    ▼
+┌──────────┐      ┌─────────────┐      ┌─────────────┐
+│ Postgres │      │    Redis    │      │  Payments   │
+│ +PostGIS │      │             │      │  (Paystack) │
+└──────────┘      └─────────────┘      └─────────────┘
+                           ▲
+┌─────────────┐            │
+│   Admin     │────────────┘
+│  (Next.js)  │
+└─────────────┘
+```
+
+## Security
+
+- JWT access tokens expire in 15 minutes
+- Refresh tokens are hashed with bcrypt and device-bound
+- OTP rate limiting: 3 requests / 60s, 5 verifications / 60s
+- CORS is strict in production (no wildcards)
+- Admin tokens are memory-only (no localStorage)
+- Mobile tokens use iOS Keychain / Android Keystore (SecureStore)
+- Environment validation crashes on missing secrets in production
+
+## Scripts
+
+| Script | Description |
+|--------|-------------|
+| `pnpm dev` | Start all dev servers |
+| `pnpm build` | Build all workspaces |
+| `pnpm -C services/api test` | Run API unit tests |
+| `pnpm -C services/api test:e2e` | Run API E2E tests |
+| `pnpm -C packages/prisma migrate deploy` | Deploy DB migrations |
+| `pnpm -C packages/prisma generate` | Generate Prisma client |
+| `pnpm -C services/api seed:admin` | Seed admin roles |
+
+## License
+
+Private — Rydalux Internal

@@ -2,6 +2,7 @@ version: '3.9'
 services:
   postgres:
     image: postgis/postgis:15-3.4
+    restart: unless-stopped
     ports:
       - '5432:5432'
     environment:
@@ -10,14 +11,26 @@ services:
       POSTGRES_PASSWORD: rydaluxpass
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rydalux"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
       - '6379:6379'
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2024-05-10T01-41-38Z
+    restart: unless-stopped
     command: server /data
     ports:
       - '9000:9000'
@@ -26,6 +39,11 @@ services:
       MINIO_ROOT_PASSWORD: minioadmin
     volumes:
       - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
 
 volumes:
   postgres-data:
