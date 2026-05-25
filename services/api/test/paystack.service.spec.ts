@@ -11,6 +11,7 @@ describe('PaystackService Phase 7.6 reliability flows', () => {
     },
     payout: {
       findUnique: jest.fn(),
+      findMany: jest.fn(),
     },
     financialTransaction: {
       findUnique: jest.fn(),
@@ -99,6 +100,21 @@ describe('PaystackService Phase 7.6 reliability flows', () => {
 
     expect(result.success).toBe(true);
     expect((service as any).reverseFullRefundLedger).toHaveBeenCalledWith('refund-1', 'manual-reconciliation');
+  });
+
+  it('lists reconciliation mismatches without loading operation payload blobs', async () => {
+    prisma.payout.findMany.mockResolvedValue([]);
+    prisma.providerEvent.findMany = jest.fn().mockResolvedValue([]);
+    prisma.refund.findMany.mockResolvedValue([]);
+    prisma.financialOperation.findMany.mockResolvedValue([]);
+    (service as any).findPaidPayoutsMissingLedger = jest.fn().mockResolvedValue([]);
+
+    const result = await service.getReconciliationMismatches(20, 0);
+    const operationQuery = prisma.financialOperation.findMany.mock.calls[0][0];
+
+    expect(result.total).toBe(0);
+    expect(operationQuery.select.requestPayload).toBeUndefined();
+    expect(operationQuery.select.responsePayload).toBeUndefined();
   });
 
   it('updates dispute admin state', async () => {

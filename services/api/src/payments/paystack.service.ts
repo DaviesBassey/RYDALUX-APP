@@ -951,6 +951,22 @@ export class PaystackService {
         orderBy: { updatedAt: 'desc' },
         take: limit,
         skip: offset,
+        select: {
+          id: true,
+          operationType: true,
+          status: true,
+          provider: true,
+          providerReference: true,
+          entityType: true,
+          entityId: true,
+          errorMessage: true,
+          attemptCount: true,
+          lastAttemptAt: true,
+          nextRetryAt: true,
+          completedAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
       }),
     ]);
 
