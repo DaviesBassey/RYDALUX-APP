@@ -31,6 +31,9 @@ FROM node:20-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
+# Install OpenSSL (required by Prisma query engine) and ca-certificates (for HTTPS SMS API calls)
+RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+
 # Create non-root user for security
 RUN groupadd -r rydalux && useradd -r -g rydalux rydalux
 
