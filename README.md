@@ -58,11 +58,17 @@ pnpm -C packages/prisma migrate deploy
 pnpm -C packages/prisma generate
 ```
 
-### 5. Seed admin roles and permissions (optional)
+### 5. Seed admin roles and first admin user
 
 ```bash
+# Required: set ADMIN_EMAIL and ADMIN_PASSWORD in .env first
+# Password must be at least 12 characters.
 pnpm -C services/api seed:admin
 ```
+
+This creates:
+- All RBAC roles and permissions
+- The first Super Admin user (if `ADMIN_EMAIL` and `ADMIN_PASSWORD` are set)
 
 ### 6. Start development servers
 
@@ -152,6 +158,50 @@ pnpm -C packages/prisma generate
 | `FINANCE_SCHEDULER_DISABLED` | No | `true` to disable reconciliation jobs |
 
 > The API validates all required secrets at startup and **crashes immediately** if anything is missing or weak in production.
+
+## SMS / OTP Configuration
+
+RYDALUX requires an SMS provider for OTP delivery in production.
+
+### Africa's Talking (Recommended)
+
+1. Sign up at [africastalking.com](https://africastalking.com)
+2. Get your username and API key from the dashboard
+3. Configure environment variables:
+
+```bash
+SMS_PROVIDER=africastalking
+AFRICASTALKING_USERNAME=your_username
+AFRICASTALKING_API_KEY=your_api_key
+AFRICASTALKING_SENDER_ID=RYDALUX
+```
+
+### Development Mode
+
+In `NODE_ENV=development`, OTP codes are returned directly in the API response (`devCode`). No SMS provider is needed.
+
+### Production Safety
+
+If `SMS_PROVIDER` is `none` or unset in production, OTP requests will fail with a clear error. This prevents silent delivery failures.
+
+## Admin User Setup
+
+The first Super Admin must be created via the seed script. There is no public API endpoint for admin registration.
+
+```bash
+# 1. Set credentials in .env
+ADMIN_EMAIL=admin@rydalux.com
+ADMIN_PASSWORD=change-me-min-12-chars
+
+# 2. Run the seed
+pnpm -C services/api seed:admin
+```
+
+Requirements:
+- Password must be at least 12 characters
+- Password is hashed with bcrypt
+- The script is idempotent — running twice will not duplicate the user
+- The user is automatically assigned the "Super Admin" role
 
 ## Backup & Restore
 

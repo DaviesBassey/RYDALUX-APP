@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
@@ -58,7 +59,7 @@ const roles = [
   }
 ];
 
-async function main() {
+async function seedPermissionsAndRoles() {
   console.log('Seeding admin roles and permissions...');
 
   for (const permission of permissions) {
@@ -101,6 +102,56 @@ async function main() {
   }
 
   console.log('Admin RBAC seed complete.');
+}
+
+async function seedAdminUser() {
+  const email = process.env.ADMIN_EMAIL;
+  const password = process.env.ADMIN_PASSWORD;
+
+  if (!email || !password) {
+    console.log('ADMIN_EMAIL or ADMIN_PASSWORD not set. Skipping admin user creation.');
+    return;
+  }
+
+  if (password.length < 12) {
+    throw new Error('ADMIN_PASSWORD must be at least 12 characters.');
+  }
+
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    console.log(`Admin user ${email} already exists. Skipping creation.`);
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  const admin = await prisma.user.create({
+    data: {
+      email,
+      passwordHash,
+      userType: 'ADMIN',
+      isEmailVerified: true,
+      isPhoneVerified: true,
+    }
+  });
+
+  const superAdminRole = await prisma.role.findUnique({ where: { name: 'Super Admin' } });
+  if (superAdminRole) {
+    await prisma.userRole.create({
+      data: {
+        userId: admin.id,
+        roleId: superAdminRole.id,
+      }
+    });
+    console.log(`Created Super Admin user: ${email}`);
+  } else {
+    console.warn('Super Admin role not found. User created without role assignment.');
+  }
+}
+
+async function main() {
+  await seedPermissionsAndRoles();
+  await seedAdminUser();
 }
 
 main()

@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { SmsService } from '../sms/sms.service';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { OtpRequestDto } from './dto/otp-request.dto';
 import { OtpVerifyDto } from './dto/otp-verify.dto';
@@ -15,7 +16,8 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly smsService: SmsService,
   ) {}
 
   async requestOtp(payload: OtpRequestDto) {
@@ -44,11 +46,22 @@ export class AuthService {
       }
     });
 
-    // In production, send the OTP code via SMS provider instead of returning it.
     const response: Record<string, unknown> = { success: true, message: 'OTP request accepted.' };
+
     if (process.env.NODE_ENV === 'development') {
       response.devCode = code;
+    } else {
+      // Production: send OTP via SMS provider
+      try {
+        await this.smsService.send({ phone: payload.phone, message: `Your Rydalux verification code is ${code}. Valid for ${OTP_CODE_EXPIRES_IN_MINUTES} minutes.` });
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'SMS delivery failed';
+        // Log the error but do not expose SMS failure details to the client
+        console.error(`Failed to send OTP to ${payload.phone}: ${errorMessage}`);
+        throw new Error('Unable to deliver verification code. Please try again later.');
+      }
     }
+
     return response;
   }
 

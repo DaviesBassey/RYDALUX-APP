@@ -5,6 +5,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { RequestLoggingMiddleware } from './core/request-logging.middleware';
+import { SmsModule } from './sms/sms.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -25,6 +26,7 @@ const devModules = process.env.NODE_ENV === 'development' ? [DevModule] : [];
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['.env'], expandVariables: true }),
     ThrottlerModule.forRoot({ ttl: 60, limit: 20 }),
+    SmsModule,
     PrismaModule,
     AuthModule,
     UsersModule,
