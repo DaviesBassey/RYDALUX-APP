@@ -25,6 +25,7 @@ COPY . .
 # Generate Prisma client and build NestJS app
 RUN pnpm -C packages/prisma generate
 RUN pnpm -C services/api build
+RUN ./node_modules/.bin/tsc services/api/prisma/seed.ts --outDir services/api/prisma-dist --module CommonJS --target ES2020 --moduleResolution Node --esModuleInterop --skipLibCheck
 
 # ── Stage 2: Runtime ──
 FROM node:20-slim AS runner
@@ -40,6 +41,7 @@ RUN groupadd -r rydalux && useradd -r -g rydalux rydalux
 # Copy runtime artifacts from builder
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/services/api/dist ./services/api/dist
+COPY --from=builder /app/services/api/prisma-dist ./services/api/prisma-dist
 COPY --from=builder /app/packages/prisma ./packages/prisma
 COPY --from=builder /app/packages/shared ./packages/shared
 COPY --from=builder /app/services/api/package.json ./services/api/package.json

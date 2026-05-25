@@ -98,13 +98,17 @@ cp .env.example .env
 #   PAYSTACK_SECRET_KEY=sk_live_...
 #   PAYSTACK_WEBHOOK_SECRET=whsec_...
 
-# 2. Build and start all services
-docker-compose -f docker-compose.prod.yml up --build -d
+# 2. Build images
+docker compose --env-file .env -f docker-compose.prod.yml build
 
-# 3. Run migrations
-# Exec into the API container or run locally:
-DATABASE_URL=postgresql://rydalux:<password>@localhost:5432/rydalux \
-  pnpm -C packages/prisma migrate deploy
+# 3. Run migrations from the one-off migration container
+docker compose --env-file .env -f docker-compose.prod.yml run --rm api-migrate
+
+# 4. Seed RBAC roles and the first admin user
+docker compose --env-file .env -f docker-compose.prod.yml run --rm api-seed
+
+# 5. Start runtime services
+docker compose --env-file .env -f docker-compose.prod.yml up -d
 ```
 
 ### Services & Ports
@@ -133,12 +137,12 @@ pnpm -C packages/prisma migrate dev
 
 **Production:**
 ```bash
-# Must run before starting API
-pnpm -C packages/prisma migrate deploy
-pnpm -C packages/prisma generate
+# Must run before starting or restarting API on staging/production.
+docker compose --env-file .env -f docker-compose.prod.yml run --rm api-migrate
 ```
 
 > Never run `migrate dev` in production. Always use `migrate deploy`.
+> For Docker staging/production, use the one-off `api-migrate` service instead of execing into the non-root API runtime container.
 
 ## Environment Variables
 
@@ -193,8 +197,8 @@ The first Super Admin must be created via the seed script. There is no public AP
 ADMIN_EMAIL=admin@rydalux.com
 ADMIN_PASSWORD=change-me-min-12-chars
 
-# 2. Run the seed
-pnpm -C services/api seed:admin
+# 2. Run the seed from the one-off seed container
+docker compose --env-file .env -f docker-compose.prod.yml run --rm api-seed
 ```
 
 Requirements:

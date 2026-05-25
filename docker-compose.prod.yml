@@ -57,6 +57,38 @@ services:
       retries: 3
       start_period: 10s
 
+  api-migrate:
+    profiles: ["ops"]
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    user: "0:0"
+    restart: "no"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://rydalux:${POSTGRES_PASSWORD}@postgres:5432/rydalux
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["node", "node_modules/prisma/build/index.js", "migrate", "deploy", "--schema", "packages/prisma/schema.prisma"]
+
+  api-seed:
+    profiles: ["ops"]
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    user: "0:0"
+    restart: "no"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://rydalux:${POSTGRES_PASSWORD}@postgres:5432/rydalux
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL is required}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["node", "services/api/prisma-dist/seed.js"]
+
   admin:
     build:
       context: .
