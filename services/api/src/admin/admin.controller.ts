@@ -21,6 +21,8 @@ import { RetryPayoutDto } from './dto/retry-payout.dto';
 import { DeadLetterProviderEventDto } from './dto/dead-letter-provider-event.dto';
 import { ResolveDisputeDto, UpdateDisputeAdminDto } from './dto/update-dispute-admin.dto';
 import { FinanceSchedulerService } from '../scheduler/finance-scheduler.service';
+import { ShipmentsService } from '../shipments/shipments.service';
+import { AdminShipmentStatusDto, AdminResolveShipmentDto } from '../shipments/dto/admin-shipment.dto';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, AdminOnlyGuard, PermissionsGuard)
@@ -31,6 +33,7 @@ export class AdminController {
     private readonly idempotencyService: IdempotencyService,
     private readonly paystackService: PaystackService,
     private readonly financeSchedulerService: FinanceSchedulerService,
+    private readonly shipmentsService: ShipmentsService,
   ) {}
 
   @Post('kyc/approve')
@@ -350,5 +353,29 @@ export class AdminController {
   resolveDispute(@Req() req: Request, @Param('id') id: string, @Body() body: ResolveDisputeDto) {
     const user = req.user as any;
     return this.paystackService.resolveDispute(id, user.userId, body.resolution, body.notes);
+  }
+
+  // ── Shipment management ──────────────────────────────────────────────────────
+
+  @Get('shipments')
+  listShipments(@Query('status') status?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.shipmentsService.adminListShipments(status, Number(limit) || 20, Number(offset) || 0);
+  }
+
+  @Get('shipments/:id')
+  getShipment(@Param('id') id: string) {
+    return this.shipmentsService.adminGetShipment(id);
+  }
+
+  @Patch('shipments/:id/status')
+  forceShipmentStatus(@Param('id') id: string, @Body() body: AdminShipmentStatusDto, @Req() req: Request) {
+    const user = req.user as any;
+    return this.shipmentsService.adminForceStatus(id, user.userId, body.status, body.reason);
+  }
+
+  @Post('shipments/:id/resolve')
+  resolveShipment(@Param('id') id: string, @Body() body: AdminResolveShipmentDto, @Req() req: Request) {
+    const user = req.user as any;
+    return this.shipmentsService.adminResolveShipment(id, user.userId, body.resolution, body.notes);
   }
 }

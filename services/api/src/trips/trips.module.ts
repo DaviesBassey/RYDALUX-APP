@@ -10,6 +10,7 @@ import { TripsService } from './trips.service';
 @Module({
   imports: [PrismaModule, RedisModule, FareModule, PaymentsModule],
   controllers: [TripsController],
-  providers: [TripsService, TripsGateway]
+  providers: [TripsService, TripsGateway],
+  exports: [TripsService],
 })
 export class TripsModule {}

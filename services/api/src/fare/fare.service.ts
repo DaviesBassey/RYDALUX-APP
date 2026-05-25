@@ -64,6 +64,13 @@ export class FareService {
     return 0.0;
   }
 
+  private calculatePackageSurcharge(rideCategory: string, packageSizeClass?: string): number {
+    if (rideCategory !== 'SHIPMENT' || !packageSizeClass) return 0;
+    if (packageSizeClass === 'MEDIUM') return 200;
+    if (packageSizeClass === 'LARGE') return 500;
+    return 0;
+  }
+
   async calculateFare(payload: CreateFareQuoteDto) {
     this.validateCoordinates(payload.pickupLatitude, payload.pickupLongitude);
     this.validateCoordinates(payload.dropoffLatitude, payload.dropoffLongitude);
@@ -86,6 +93,7 @@ export class FareService {
 
     const surge = this.calculateSurge();
     const airportSurcharge = this.calculateAirportSurcharge();
+    const packageSurcharge = this.calculatePackageSurcharge(payload.rideCategory, payload.packageSizeClass);
 
     let promoDiscount = 0.0;
     let promoId = null;
@@ -101,7 +109,7 @@ export class FareService {
       }
     }
 
-    let total = subtotal * surge + airportSurcharge - promoDiscount;
+    let total = subtotal * surge + airportSurcharge + packageSurcharge - promoDiscount;
     if (total < MINIMUM_FARE) total = MINIMUM_FARE;
 
     const created = await this.prisma.fareQuote.create({
@@ -113,7 +121,7 @@ export class FareService {
         timeFare,
         surgeFactor: surge,
         taxAmount: 0.0,
-        extraFees: airportSurcharge,
+        extraFees: airportSurcharge + packageSurcharge,
         totalFare: Number(total.toFixed(2)),
         pickupLatitude: payload.pickupLatitude,
         pickupLongitude: payload.pickupLongitude,
@@ -136,6 +144,7 @@ export class FareService {
         bookingFee,
         surge,
         airportSurcharge,
+        packageSurcharge,
         promoDiscount: Number(promoDiscount.toFixed(2)),
         total: Number(created.totalFare),
         pickupZone: pickupZone?.name ?? null,

@@ -1,4 +1,4 @@
-import { IsLatitude, IsLongitude, IsOptional, IsString, IsEnum, IsISO8601 } from 'class-validator';
+import { IsLatitude, IsLongitude, IsOptional, IsString, IsEnum, IsISO8601, IsIn } from 'class-validator';
 import { ServiceType } from '@prisma/client';
 
 export class CreateFareQuoteDto {
@@ -16,6 +16,10 @@ export class CreateFareQuoteDto {
 
   @IsEnum(ServiceType)
   rideCategory: ServiceType;
+
+  @IsOptional()
+  @IsIn(['SMALL', 'MEDIUM', 'LARGE'])
+  packageSizeClass?: string;
 
   @IsOptional()
   @IsISO8601()
