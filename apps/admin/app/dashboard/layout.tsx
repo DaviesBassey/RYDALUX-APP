@@ -11,6 +11,7 @@ const NAV = [
   { href: '/dashboard/drivers', label: 'Driver Documents' },
   { href: '/dashboard/vehicles', label: 'Vehicle Approval' },
   { href: '/dashboard/safety', label: 'Safety' },
+  { href: '/dashboard/shipments', label: 'Shipments' },
   { href: '/dashboard/finance', label: 'Finance' },
 ];
 

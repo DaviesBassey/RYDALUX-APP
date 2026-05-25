@@ -248,4 +248,13 @@ export const api = {
   generateDailyClose: () => fetchJson<any>('/admin/finance/daily-close/generate', { method: 'POST' }),
   getDailyCloseReports: (limit = 20, offset = 0) => fetchJson<any>(`/admin/finance/daily-close?limit=${limit}&offset=${offset}`),
   getLatestDailyCloseReport: () => fetchJson<any>('/admin/finance/daily-close/latest'),
+
+  // Shipments
+  getShipments: (status?: string, limit = 20, offset = 0) =>
+    fetchJson<any>(`/admin/shipments?${new URLSearchParams({ ...(status ? { status } : {}), limit: String(limit), offset: String(offset) })}`),
+  getShipment: (id: string) => fetchJson<any>(`/admin/shipments/${id}`),
+  forceShipmentStatus: (id: string, status: 'CANCELLED' | 'FAILED', reason?: string) =>
+    fetchJson<any>(`/admin/shipments/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, reason }) }),
+  resolveShipment: (id: string, resolution: string, notes?: string) =>
+    fetchJson<any>(`/admin/shipments/${id}/resolve`, { method: 'POST', body: JSON.stringify({ resolution, notes }) }),
 };
