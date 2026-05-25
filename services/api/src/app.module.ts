@@ -19,12 +19,13 @@ import { DevModule } from './dev/dev.module';
 import { IdempotencyModule } from './idempotency/idempotency.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { ShipmentsModule } from './shipments/shipments.module';
+import configuration from './config/configuration';
 
 const devModules = process.env.NODE_ENV === 'development' ? [DevModule] : [];
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, envFilePath: ['.env'], expandVariables: true }),
+    ConfigModule.forRoot({ isGlobal: true, envFilePath: ['.env'], expandVariables: true, load: [configuration] }),
     ThrottlerModule.forRoot({ ttl: 60, limit: 20 }),
     SmsModule,
     PrismaModule,
