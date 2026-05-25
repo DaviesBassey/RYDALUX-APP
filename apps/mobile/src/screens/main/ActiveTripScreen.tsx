@@ -122,9 +122,9 @@ export default function ActiveTripScreen({ route, navigation }: Props) {
         onPress: async () => {
           setCancelling(true);
           try {
-            const updated = await cancelTrip(tripId);
-            setTrip(updated);
+            await cancelTrip(tripId);
             stopPolling();
+            navigation.navigate('Home');
           } catch (e: any) {
             Alert.alert('Error', e?.response?.data?.error?.message ?? e?.response?.data?.message ?? 'Could not cancel the trip.');
           } finally {
@@ -196,6 +196,8 @@ export default function ActiveTripScreen({ route, navigation }: Props) {
   const canCancel = RIDER_CANCELLABLE_STATUSES.includes(trip.status);
   const statusColor = STATUS_COLORS[trip.status] ?? '#888';
   const statusLabel = STATUS_LABELS[trip.status] ?? trip.status;
+  const pickupAddress = trip.pickup?.address ?? 'Pickup unavailable';
+  const dropoffAddress = trip.dropoff?.address ?? 'Dropoff unavailable';
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -212,9 +214,9 @@ export default function ActiveTripScreen({ route, navigation }: Props) {
 
         {/* Route */}
         <View style={styles.card}>
-          <RouteRow label="From" value={trip.pickup.address} />
+          <RouteRow label="From" value={pickupAddress} />
           <View style={styles.routeDivider} />
-          <RouteRow label="To" value={trip.dropoff.address} />
+          <RouteRow label="To" value={dropoffAddress} />
         </View>
 
         {/* Fare */}
