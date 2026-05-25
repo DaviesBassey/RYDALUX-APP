@@ -140,6 +140,9 @@ importers:
       expo:
         specifier: ^49.0.0
         version: 49.0.23(@babel/core@7.29.0)
+      expo-secure-store:
+        specifier: ~12.3.1
+        version: 12.3.1(expo@49.0.23(@babel/core@7.29.0))
       expo-status-bar:
         specifier: ~1.4.4
         version: 1.4.4
@@ -3146,6 +3149,11 @@ packages:
 
   expo-modules-core@1.5.13:
     resolution: {integrity: sha512-cKRsiHKwpDPRkBgMW3XdUWmEUDzihEPWXAyeo629BXpJ6uX6a66Zbz63SEXhlgsbLq8FB77gvYku3ceBqb+hHg==}
+
+  expo-secure-store@12.3.1:
+    resolution: {integrity: sha512-XLIgWDiIuiR0c+AA4NCWWibAMHCZUyRcy+lQBU49U6rvG+xmd3YrBJfQjfqAPyLroEqnLPGTWUX57GyRsfDOQw==}
+    peerDependencies:
+      expo: '*'
 
   expo-status-bar@1.4.4:
     resolution: {integrity: sha512-5DV0hIEWgatSC3UgQuAZBoQeaS9CqeWRZ3vzBR9R/+IUD87Adbi4FGhU10nymRqFXOizGsureButGZIXPs7zEA==}
@@ -10111,6 +10119,10 @@ snapshots:
     dependencies:
       compare-versions: 3.6.0
       invariant: 2.2.4
+
+  expo-secure-store@12.3.1(expo@49.0.23(@babel/core@7.29.0)):
+    dependencies:
+      expo: 49.0.23(@babel/core@7.29.0)
 
   expo-status-bar@1.4.4: {}
 

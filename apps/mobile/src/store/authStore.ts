@@ -1,8 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureGetItem, secureSetItem, secureDeleteItem } from './secureStore';
 
-const KEYS = {
+const SECURE_KEYS = {
   ACCESS_TOKEN: 'auth.accessToken',
   REFRESH_TOKEN: 'auth.refreshToken',
+} as const;
+
+const ASYNC_KEYS = {
   FINGERPRINT: 'auth.fingerprint',
   USER_TYPE: 'auth.userType',
 } as const;
@@ -17,9 +21,9 @@ export type StoredTokens = {
 
 export async function getTokens(): Promise<Partial<StoredTokens>> {
   const [accessToken, refreshToken, userType] = await Promise.all([
-    AsyncStorage.getItem(KEYS.ACCESS_TOKEN),
-    AsyncStorage.getItem(KEYS.REFRESH_TOKEN),
-    AsyncStorage.getItem(KEYS.USER_TYPE),
+    secureGetItem(SECURE_KEYS.ACCESS_TOKEN),
+    secureGetItem(SECURE_KEYS.REFRESH_TOKEN),
+    AsyncStorage.getItem(ASYNC_KEYS.USER_TYPE),
   ]);
   return {
     accessToken: accessToken ?? undefined,
@@ -30,25 +34,25 @@ export async function getTokens(): Promise<Partial<StoredTokens>> {
 
 export async function saveTokens(tokens: StoredTokens): Promise<void> {
   await Promise.all([
-    AsyncStorage.setItem(KEYS.ACCESS_TOKEN, tokens.accessToken),
-    AsyncStorage.setItem(KEYS.REFRESH_TOKEN, tokens.refreshToken),
-    AsyncStorage.setItem(KEYS.USER_TYPE, tokens.userType),
+    secureSetItem(SECURE_KEYS.ACCESS_TOKEN, tokens.accessToken),
+    secureSetItem(SECURE_KEYS.REFRESH_TOKEN, tokens.refreshToken),
+    AsyncStorage.setItem(ASYNC_KEYS.USER_TYPE, tokens.userType),
   ]);
 }
 
 export async function clearTokens(): Promise<void> {
   await Promise.all([
-    AsyncStorage.removeItem(KEYS.ACCESS_TOKEN),
-    AsyncStorage.removeItem(KEYS.REFRESH_TOKEN),
-    AsyncStorage.removeItem(KEYS.USER_TYPE),
+    secureDeleteItem(SECURE_KEYS.ACCESS_TOKEN),
+    secureDeleteItem(SECURE_KEYS.REFRESH_TOKEN),
+    AsyncStorage.removeItem(ASYNC_KEYS.USER_TYPE),
   ]);
 }
 
 export async function getOrCreateFingerprint(): Promise<string> {
-  let fp = await AsyncStorage.getItem(KEYS.FINGERPRINT);
+  let fp = await AsyncStorage.getItem(ASYNC_KEYS.FINGERPRINT);
   if (!fp) {
     fp = generateUUID();
-    await AsyncStorage.setItem(KEYS.FINGERPRINT, fp);
+    await AsyncStorage.setItem(ASYNC_KEYS.FINGERPRINT, fp);
   }
   return fp;
 }

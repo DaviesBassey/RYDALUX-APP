@@ -1,3 +1,5 @@
+import { getAdminAccessToken, getAdminRefreshToken, getAdminFingerprint, setAdminTokens, clearAdminTokens } from './auth';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 export interface AdminLoginRequest {
@@ -143,23 +145,6 @@ export interface AuditLogItem {
   createdAt: string;
 }
 
-async function fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('admin_access_token') : null;
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options?.headers || {}),
-    },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: res.statusText }));
-    throw new Error(err.error?.message || err.message || `HTTP ${res.status}`);
-  }
-  return res.json() as Promise<T>;
-}
-
 export interface SosEventItem {
   id: string;
   type: string;
@@ -198,6 +183,63 @@ export interface IncidentsResponse {
   total: number;
   limit: number;
   offset: number;
+}
+
+async function fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = typeof window !== 'undefined' ? getAdminAccessToken() : null;
+  const res = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options?.headers || {}),
+    },
+  });
+
+  if (res.status === 401) {
+    const refreshToken = getAdminRefreshToken();
+    const fingerprint = getAdminFingerprint();
+    if (refreshToken && fingerprint) {
+      try {
+        const refreshRes = await fetch(`${API_URL}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: refreshToken, fingerprint }),
+        });
+        if (refreshRes.ok) {
+          const data: TokenResponse = await refreshRes.json();
+          setAdminTokens(data.accessToken, data.refreshToken);
+          const retryRes = await fetch(`${API_URL}${path}`, {
+            ...options,
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${data.accessToken}`,
+              ...(options?.headers || {}),
+            },
+          });
+          if (!retryRes.ok) {
+            const err = await retryRes.json().catch(() => ({ message: retryRes.statusText }));
+            throw new Error(err.error?.message || err.message || `HTTP ${retryRes.status}`);
+          }
+          return retryRes.json() as Promise<T>;
+        }
+      } catch (err) {
+        if (err instanceof Error && err.message.startsWith('HTTP ')) throw err;
+        // Fall through to session expiry
+      }
+    }
+    clearAdminTokens();
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+    throw new Error('Session expired. Please log in again.');
+  }
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(err.error?.message || err.message || `HTTP ${res.status}`);
+  }
+  return res.json() as Promise<T>;
 }
 
 export const api = {

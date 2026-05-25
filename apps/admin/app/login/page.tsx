@@ -24,7 +24,7 @@ export default function LoginPage() {
         fingerprint: 'admin-dashboard-' + Date.now(),
         deviceName: 'Admin Dashboard',
       });
-      login(res.accessToken);
+      login(res.accessToken, res.refreshToken);
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Login failed');
