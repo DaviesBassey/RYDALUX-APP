@@ -231,7 +231,7 @@ export class AuthService {
 
     const accessToken = await this.jwtService.signAsync(
       { sub: userId, sessionId, userType, type: 'access' },
-      { secret: this.configService.get<string>('JWT_ACCESS_SECRET', 'change-me'), expiresIn: ACCESS_TOKEN_EXPIRES_IN }
+      { secret: this.configService.getOrThrow<string>('JWT_ACCESS_SECRET'), expiresIn: ACCESS_TOKEN_EXPIRES_IN }
     );
 
     return { accessToken, refreshToken, expiresIn: ACCESS_TOKEN_EXPIRES_IN, userType };
@@ -240,14 +240,14 @@ export class AuthService {
   private async createRefreshToken(userId: string, sessionId: string) {
     return this.jwtService.signAsync(
       { sub: userId, sid: sessionId, type: 'refresh' },
-      { secret: this.configService.get<string>('JWT_REFRESH_SECRET', 'change-me'), expiresIn: REFRESH_TOKEN_EXPIRES_IN }
+      { secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'), expiresIn: REFRESH_TOKEN_EXPIRES_IN }
     );
   }
 
   private async verifyRefreshToken(token: string) {
     try {
       return await this.jwtService.verifyAsync(token, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET', 'change-me')
+        secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET')
       });
     } catch (error) {
       throw new UnauthorizedException('Invalid token.');

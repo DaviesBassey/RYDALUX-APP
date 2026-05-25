@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, HttpCode, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Headers, HttpCode, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RiderOnlyGuard } from '../auth/rider-only.guard';
@@ -41,12 +41,12 @@ export class PaystackController {
     @Req() req: any,
   ) {
     const rawBody = req.rawBody as Buffer | undefined;
-    if (!rawBody) {
-      return { received: false };
+    if (!rawBody || !signature) {
+      throw new UnauthorizedException('Missing signature or body.');
     }
     const isValid = this.paystackService.verifyWebhookSignature(rawBody, signature);
     if (!isValid) {
-      return { received: false };
+      throw new UnauthorizedException('Invalid webhook signature.');
     }
     const payload = JSON.parse(rawBody.toString());
     await this.paystackService.handleWebhookEvent(payload);

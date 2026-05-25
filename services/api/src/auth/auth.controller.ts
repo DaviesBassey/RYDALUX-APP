@@ -1,5 +1,6 @@
 import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { OtpRequestDto } from './dto/otp-request.dto';
@@ -12,11 +13,13 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('otp/request')
+  @Throttle(3, 60)
   requestOtp(@Body() body: OtpRequestDto) {
     return this.authService.requestOtp(body);
   }
 
   @Post('otp/verify')
+  @Throttle(5, 60)
   verifyOtp(@Body() body: OtpVerifyDto) {
     return this.authService.verifyOtp(body);
   }

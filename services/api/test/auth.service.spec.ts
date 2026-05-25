@@ -27,7 +27,12 @@ const configService: any = {
     if (key === 'JWT_ACCESS_SECRET') return 'access-secret';
     if (key === 'JWT_REFRESH_SECRET') return 'refresh-secret';
     return null;
-  })
+  }),
+  getOrThrow: jest.fn((key: string) => {
+    if (key === 'JWT_ACCESS_SECRET') return 'access-secret';
+    if (key === 'JWT_REFRESH_SECRET') return 'refresh-secret';
+    throw new Error(`Missing config: ${key}`);
+  }),
 };
 
 describe('AuthService', () => {
