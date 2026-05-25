@@ -34,46 +34,165 @@ export default function LoginPage() {
   }
 
   return (
-    <main style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f4f1eb' }}>
-      <div style={{ width: '100%', maxWidth: 420, padding: 32, background: '#fff', borderRadius: 10, boxShadow: '0 18px 48px rgba(17, 24, 39, 0.12)', border: '1px solid #eadfce' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24 }}>
-          <img src="/brand/rydalux-icon-light.png" alt="" style={{ width: 48, height: 48, borderRadius: 12 }} />
-          <div>
-            <img src="/brand/rydalux-logo-black.png" alt="Rydalux" style={{ display: 'block', width: 154, height: 'auto' }} />
-            <p style={{ margin: '4px 0 0', color: '#6b5d45', fontSize: 13 }}>Operations dashboard</p>
-          </div>
+    <main className="loginShell">
+      <section className="loginCard" aria-label="Admin login">
+        <div className="brandBlock">
+          <img src="/brand/rydalux-logo-black.png" alt="Rydalux" className="brandLogo" />
+          <p className="brandKicker">Operations console</p>
         </div>
         <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>Email</label>
+          <div className="field">
+            <label className="label" htmlFor="admin-email">Email</label>
             <input
+              id="admin-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14 }}
+              className="input"
             />
           </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>Password</label>
+          <div className="field">
+            <label className="label" htmlFor="admin-password">Password</label>
             <input
+              id="admin-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14 }}
+              className="input"
             />
           </div>
-          {error && <div style={{ marginBottom: 16, padding: 10, background: '#fee2e2', color: '#b91c1c', borderRadius: 8, fontSize: 14 }}>{error}</div>}
+          {error && <div className="error">{error}</div>}
           <button
             type="submit"
             disabled={loading}
-            style={{ width: '100%', padding: '12px', borderRadius: 8, border: 'none', background: '#111111', color: '#fff', fontSize: 14, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}
+            className="submit"
           >
             {loading ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
-      </div>
+      </section>
+      <style jsx>{`
+        .loginShell {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 100vh;
+          padding: 32px;
+          background:
+            linear-gradient(135deg, rgba(17, 17, 17, 0.08), transparent 34%),
+            #f4f1eb;
+        }
+
+        .loginCard {
+          width: 100%;
+          max-width: 428px;
+          padding: 38px;
+          background: rgba(255, 255, 255, 0.94);
+          border: 1px solid #e4d7c4;
+          border-radius: 18px;
+          box-shadow: 0 24px 70px rgba(17, 17, 17, 0.16);
+        }
+
+        .brandBlock {
+          margin-bottom: 30px;
+          padding-bottom: 22px;
+          border-bottom: 1px solid #eee4d6;
+        }
+
+        .brandLogo {
+          display: block;
+          width: 174px;
+          height: auto;
+        }
+
+        .brandKicker {
+          margin: 10px 0 0;
+          color: #7b6744;
+          font-size: 13px;
+          font-weight: 600;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+        }
+
+        .field {
+          margin-bottom: 18px;
+        }
+
+        .label {
+          display: block;
+          margin-bottom: 7px;
+          color: #2a241b;
+          font-size: 13px;
+          font-weight: 700;
+        }
+
+        .input {
+          box-sizing: border-box;
+          width: 100%;
+          padding: 13px 14px;
+          border: 1px solid #d8cbb8;
+          border-radius: 11px;
+          background: #fbfaf7;
+          color: #111111;
+          font-size: 14px;
+          outline: none;
+          transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+        }
+
+        .input:focus {
+          border-color: #b8954d;
+          background: #ffffff;
+          box-shadow: 0 0 0 3px rgba(210, 177, 109, 0.24);
+        }
+
+        .error {
+          margin-bottom: 16px;
+          padding: 11px 12px;
+          border: 1px solid #fecaca;
+          border-radius: 10px;
+          background: #fff1f1;
+          color: #991b1b;
+          font-size: 14px;
+        }
+
+        .submit {
+          box-sizing: border-box;
+          width: 100%;
+          padding: 14px;
+          border: 1px solid #111111;
+          border-radius: 11px;
+          background: #111111;
+          color: #ffffff;
+          font-size: 14px;
+          font-weight: 800;
+          cursor: pointer;
+          transition: transform 140ms ease, background 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
+          box-shadow: 0 12px 26px rgba(17, 17, 17, 0.18);
+        }
+
+        .submit:hover:not(:disabled) {
+          background: #1f1a12;
+          box-shadow: 0 16px 30px rgba(17, 17, 17, 0.22);
+          transform: translateY(-1px);
+        }
+
+        .submit:active:not(:disabled) {
+          transform: translateY(0);
+          box-shadow: 0 10px 20px rgba(17, 17, 17, 0.18);
+        }
+
+        .submit:focus-visible {
+          outline: 3px solid rgba(210, 177, 109, 0.48);
+          outline-offset: 3px;
+        }
+
+        .submit:disabled {
+          cursor: not-allowed;
+          opacity: 0.7;
+        }
+      `}</style>
     </main>
   );
 }
