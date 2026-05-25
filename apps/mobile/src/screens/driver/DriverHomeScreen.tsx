@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
@@ -22,6 +22,11 @@ import {
   devApproveDriver,
   AvailableTrip,
 } from '../../api/driver';
+import {
+  getAvailableShipments,
+  acceptShipment,
+  AvailableShipment,
+} from '../../api/shipments';
 import { useAuth } from '../../context/AuthContext';
 import { getTokens } from '../../store/authStore';
 import { api } from '../../api/client';
@@ -33,9 +38,11 @@ export default function DriverHomeScreen() {
   const { logout } = useAuth();
 
   const [trips, setTrips] = useState<AvailableTrip[]>([]);
+  const [shipments, setShipments] = useState<AvailableShipment[]>([]);
   const [isOnline, setIsOnline] = useState(false);
   const [fullyApproved, setFullyApproved] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [accepting, setAccepting] = useState<string | null>(null);
   const [devLoading, setDevLoading] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -47,24 +54,34 @@ export default function DriverHomeScreen() {
     } catch {}
   }
 
-  async function fetchTrips() {
+  async function fetchJobs() {
     try {
-      const { trips: list } = await getAvailableTrips();
+      const [{ trips: list }, { shipments: slist }] = await Promise.all([
+        getAvailableTrips(),
+        getAvailableShipments(),
+      ]);
       setTrips(list);
+      setShipments(slist);
     } catch {}
   }
 
   async function loadInitial() {
     setLoading(true);
     await fetchStatus();
-    if (fullyApproved) await fetchTrips();
+    if (fullyApproved) await fetchJobs();
     setLoading(false);
+  }
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await fetchJobs();
+    setRefreshing(false);
   }
 
   useFocusEffect(
     useCallback(() => {
       loadInitial();
-      pollRef.current = setInterval(fetchTrips, 5000);
+      pollRef.current = setInterval(fetchJobs, 5000);
       return () => {
         if (pollRef.current) clearInterval(pollRef.current);
       };
@@ -75,13 +92,13 @@ export default function DriverHomeScreen() {
     try {
       await activateOnline();
       setIsOnline(true);
-      fetchTrips();
+      fetchJobs();
     } catch (e: any) {
       Alert.alert('Error', e?.response?.data?.error?.message ?? 'Could not go online.');
     }
   }
 
-  async function handleAccept(tripId: string) {
+  async function handleAcceptTrip(tripId: string) {
     setAccepting(tripId);
     try {
       await acceptTrip(tripId);
@@ -89,6 +106,19 @@ export default function DriverHomeScreen() {
       navigation.navigate('DriverActiveTrip');
     } catch (e: any) {
       Alert.alert('Error', e?.response?.data?.error?.message ?? 'Could not accept trip.');
+    } finally {
+      setAccepting(null);
+    }
+  }
+
+  async function handleAcceptShipment(shipmentId: string) {
+    setAccepting(shipmentId);
+    try {
+      const shipment = await acceptShipment(shipmentId);
+      if (pollRef.current) clearInterval(pollRef.current);
+      navigation.navigate('DriverActiveShipment', { shipmentId: shipment.id });
+    } catch (e: any) {
+      Alert.alert('Error', e?.response?.data?.error?.message ?? 'Could not accept shipment.');
     } finally {
       setAccepting(null);
     }
@@ -112,10 +142,10 @@ export default function DriverHomeScreen() {
     }
   }
 
-  function renderTrip({ item }: { item: AvailableTrip }) {
+  function renderTripCard(item: AvailableTrip) {
     const isAccepting = accepting === item.id;
     return (
-      <View style={styles.card}>
+      <View key={item.id} style={styles.card}>
         <View style={styles.cardHeader}>
           <Text style={styles.ref}>{item.reference}</Text>
           {item.fare != null && <Text style={styles.fare}>₦{item.fare.toLocaleString()}</Text>}
@@ -124,10 +154,37 @@ export default function DriverHomeScreen() {
         <Text style={styles.addr} numberOfLines={1}>To: {item.dropoff.address}</Text>
         <TouchableOpacity
           style={[styles.acceptBtn, isAccepting && styles.btnDisabled]}
-          onPress={() => handleAccept(item.id)}
+          onPress={() => handleAcceptTrip(item.id)}
           disabled={isAccepting}
         >
-          {isAccepting ? <ActivityIndicator color="#fff" /> : <Text style={styles.acceptText}>Accept</Text>}
+          {isAccepting ? <ActivityIndicator color="#fff" /> : <Text style={styles.acceptText}>Accept Ride</Text>}
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  function renderShipmentCard(item: AvailableShipment) {
+    const isAccepting = accepting === item.id;
+    return (
+      <View key={item.id} style={[styles.card, styles.parcelCard]}>
+        <View style={styles.cardHeader}>
+          <View style={styles.badgeRow}>
+            <Text style={styles.ref}>{item.reference}</Text>
+            <View style={styles.parcelBadge}>
+              <Text style={styles.parcelBadgeText}>PARCEL</Text>
+            </View>
+          </View>
+          {item.fare != null && <Text style={styles.fare}>₦{parseFloat(item.fare.totalFare).toLocaleString()}</Text>}
+        </View>
+        <Text style={styles.addr} numberOfLines={1}>From: {item.pickup.address}</Text>
+        <Text style={styles.addr} numberOfLines={1}>To: {item.dropoff.address}</Text>
+        <Text style={styles.addr} numberOfLines={1}>Size: {item.packageSizeClass} • Recipient: {item.recipientName}</Text>
+        <TouchableOpacity
+          style={[styles.acceptBtn, styles.parcelAcceptBtn, isAccepting && styles.btnDisabled]}
+          onPress={() => handleAcceptShipment(item.id)}
+          disabled={isAccepting}
+        >
+          {isAccepting ? <ActivityIndicator color="#fff" /> : <Text style={styles.acceptText}>Accept Parcel</Text>}
         </TouchableOpacity>
       </View>
     );
@@ -172,18 +229,24 @@ export default function DriverHomeScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
-          data={trips}
-          keyExtractor={(t) => t.id}
-          renderItem={renderTrip}
+        <ScrollView
           contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={false} onRefresh={fetchTrips} />}
-          ListEmptyComponent={
-            <View style={styles.section}>
-              <Text style={styles.statusText}>No available trips. Waiting...</Text>
-            </View>
-          }
-        />
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        >
+          <Text style={styles.sectionTitle}>Ride Jobs</Text>
+          {trips.length === 0 ? (
+            <Text style={styles.emptyText}>No available rides</Text>
+          ) : (
+            trips.map(renderTripCard)
+          )}
+
+          <Text style={styles.sectionTitle}>Parcel Jobs</Text>
+          {shipments.length === 0 ? (
+            <Text style={styles.emptyText}>No available parcels</Text>
+          ) : (
+            shipments.map(renderShipmentCard)
+          )}
+        </ScrollView>
       )}
     </SafeAreaView>
   );
@@ -239,4 +302,44 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   acceptText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#6b5d45',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#999',
+    marginBottom: 16,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  parcelCard: {
+    borderWidth: 1.5,
+    borderColor: '#d2b16d',
+  },
+  parcelAcceptBtn: {
+    backgroundColor: '#d2b16d',
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  parcelBadge: {
+    backgroundColor: '#d2b16d',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  parcelBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#111111',
+    letterSpacing: 0.5,
+  },
 });

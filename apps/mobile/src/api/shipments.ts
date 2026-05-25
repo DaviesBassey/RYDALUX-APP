@@ -160,3 +160,58 @@ export const RIDER_CANCELLABLE_SHIPMENT_STATUSES: ShipmentStatus[] = [
   'DRIVER_EN_ROUTE',
   'AT_PICKUP',
 ];
+
+// ── Driver ───────────────────────────────────────────────────────────────────
+
+export type AvailableShipment = {
+  id: string;
+  tripId: string;
+  reference: string;
+  status: ShipmentStatus;
+  packageSizeClass: PackageSizeClass;
+  packageDescription: string | null;
+  recipientName: string;
+  specialInstructions: string | null;
+  pickup: ShipmentLocation;
+  dropoff: ShipmentLocation;
+  fare: { totalFare: string } | null;
+  createdAt: string;
+};
+
+export async function getAvailableShipments(): Promise<{ shipments: AvailableShipment[] }> {
+  const { data } = await api.get<{ shipments: AvailableShipment[] }>('/shipments/driver/available');
+  return data;
+}
+
+export async function getDriverActiveShipment(): Promise<Shipment | null> {
+  const { data } = await api.get<{ shipment: Shipment | null }>('/shipments/driver/active');
+  return data.shipment;
+}
+
+export async function acceptShipment(shipmentId: string): Promise<Shipment> {
+  const { data } = await api.post<Shipment>(`/shipments/${shipmentId}/driver/accept`);
+  return data;
+}
+
+export async function arriveAtPickup(shipmentId: string): Promise<{ success: boolean; status: string; tripStatus: string }> {
+  const { data } = await api.post(`/shipments/${shipmentId}/arrive-pickup`);
+  return data;
+}
+
+export async function confirmPickup(shipmentId: string, pin: string): Promise<{ success: boolean; status: string; tripStatus: string }> {
+  const { data } = await api.post(`/shipments/${shipmentId}/confirm-pickup`, { pin });
+  return data;
+}
+
+export async function submitShipmentProof(
+  shipmentId: string,
+  dto: { url: string; proofType?: string; notes?: string }
+): Promise<ShipmentProof> {
+  const { data } = await api.post<ShipmentProof>(`/shipments/${shipmentId}/proofs`, dto);
+  return data;
+}
+
+export async function confirmDelivery(shipmentId: string): Promise<{ success: boolean; status: string; tripStatus: string; deliveredAt: string }> {
+  const { data } = await api.post(`/shipments/${shipmentId}/confirm-delivery`);
+  return data;
+}
