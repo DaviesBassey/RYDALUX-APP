@@ -7,6 +7,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Image,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -84,6 +85,13 @@ export default function OtpScreen({ route }: Props) {
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
 
+          <View style={styles.brandBlock}>
+            <Image
+              source={require('../../../assets/brand/rydalux-logo-black.png')}
+              style={styles.brandLogo}
+            />
+          </View>
+
           <Text style={styles.heading}>Enter your code</Text>
           <Text style={styles.sub}>
             Code sent to <Text style={styles.phone}>{phone}</Text>
@@ -119,16 +127,18 @@ export default function OtpScreen({ route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#fff' },
+  safe: { flex: 1, backgroundColor: '#f4f1eb' },
   flex: { flex: 1 },
   container: { flex: 1, justifyContent: 'center', padding: 28 },
   backBtn: { position: 'absolute', top: 16, left: 28 },
-  backText: { color: '#e94560', fontSize: 15, fontWeight: '600' },
+  backText: { color: '#1a1a2e', fontSize: 15, fontWeight: '600' },
+  brandBlock: { marginBottom: 32, alignItems: 'center' },
+  brandLogo: { width: 140, height: 40, resizeMode: 'contain' },
   heading: { fontSize: 22, fontWeight: '700', color: '#1a1a2e', marginBottom: 8 },
-  sub: { fontSize: 14, color: '#666', marginBottom: 20, lineHeight: 20 },
+  sub: { fontSize: 14, color: '#6b5d45', marginBottom: 20, lineHeight: 20 },
   phone: { fontWeight: '700', color: '#1a1a2e' },
   devBanner: {
-    backgroundColor: '#fff3cd',
+    backgroundColor: '#fafafa',
     borderRadius: 8,
     padding: 10,
     marginBottom: 16,
@@ -149,8 +159,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     backgroundColor: '#fafafa',
   },
-  error: { color: '#e94560', fontSize: 13, marginBottom: 12 },
-  btn: { backgroundColor: '#e94560', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 4 },
+  error: { color: '#b42318', fontSize: 13, marginBottom: 12 },
+  btn: { backgroundColor: '#111111', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 4 },
   btnDisabled: { opacity: 0.6 },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

@@ -9,6 +9,7 @@ import {
   Platform,
   ActivityIndicator,
   ScrollView,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -46,6 +47,13 @@ export default function ProfileSetupScreen({ route }: Props) {
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+          <View style={styles.brandBlock}>
+            <Image
+              source={require('../../../assets/brand/rydalux-logo-black.png')}
+              style={styles.brandLogo}
+            />
+          </View>
+
           <Text style={styles.heading}>Set up your profile</Text>
           <Text style={styles.sub}>This only takes a moment.</Text>
 
@@ -86,12 +94,14 @@ export default function ProfileSetupScreen({ route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#fff' },
+  safe: { flex: 1, backgroundColor: '#f4f1eb' },
   flex: { flex: 1 },
-  container: { padding: 28, paddingTop: 60 },
+  container: { padding: 28, paddingTop: 40 },
+  brandBlock: { marginBottom: 32, alignItems: 'center' },
+  brandLogo: { width: 140, height: 40, resizeMode: 'contain' },
   heading: { fontSize: 24, fontWeight: '700', color: '#1a1a2e', marginBottom: 8 },
-  sub: { fontSize: 14, color: '#666', marginBottom: 28, lineHeight: 20 },
-  label: { fontSize: 13, fontWeight: '600', color: '#444', marginBottom: 6, marginTop: 12 },
+  sub: { fontSize: 14, color: '#6b5d45', marginBottom: 28, lineHeight: 20 },
+  label: { fontSize: 13, fontWeight: '600', color: '#1a1a2e', marginBottom: 6, marginTop: 12 },
   input: {
     borderWidth: 1.5,
     borderColor: '#ddd',
@@ -102,8 +112,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fafafa',
   },
   inputDisabled: { color: '#999', backgroundColor: '#f0f0f0' },
-  error: { color: '#e94560', fontSize: 13, marginTop: 12 },
-  btn: { backgroundColor: '#e94560', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 28 },
+  error: { color: '#b42318', fontSize: 13, marginTop: 12 },
+  btn: { backgroundColor: '#111111', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 28 },
   btnDisabled: { opacity: 0.6 },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

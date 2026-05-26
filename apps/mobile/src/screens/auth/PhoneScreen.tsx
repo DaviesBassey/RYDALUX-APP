@@ -49,7 +49,10 @@ export default function PhoneScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <View style={styles.container}>
           <View style={styles.brandBlock}>
-            <Image source={require('../../../assets/brand/rydalux-icon-light.png')} style={styles.brandIcon} />
+            <Image
+              source={require('../../../assets/brand/rydalux-logo-black.png')}
+              style={styles.brandLogo}
+            />
           </View>
           <Text style={styles.heading}>Enter your phone number</Text>
           <Text style={styles.sub}>We'll send a one-time code to verify your number.</Text>
@@ -95,8 +98,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f4f1eb' },
   flex: { flex: 1 },
   container: { flex: 1, justifyContent: 'center', padding: 28 },
-  brandBlock: { marginBottom: 32 },
-  brandIcon: { width: 58, height: 58, borderRadius: 14 },
+  brandBlock: { marginBottom: 32, alignItems: 'center' },
+  brandLogo: { width: 140, height: 40, resizeMode: 'contain' },
   heading: { fontSize: 22, fontWeight: '700', color: '#1a1a2e', marginBottom: 8 },
   sub: { fontSize: 14, color: '#6b5d45', marginBottom: 20, lineHeight: 20 },
   toggle: {

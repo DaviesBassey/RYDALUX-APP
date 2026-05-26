@@ -7,6 +7,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -43,17 +44,17 @@ const STATUS_LABELS: Partial<Record<TripStatus, string>> = {
 };
 
 const STATUS_COLORS: Partial<Record<TripStatus, string>> = {
-  REQUESTED: '#f0a500',
-  DRIVER_ASSIGNED: '#3498db',
-  DRIVER_ARRIVING: '#3498db',
-  DRIVER_ARRIVED: '#9b59b6',
-  PIN_VERIFIED: '#9b59b6',
-  IN_PROGRESS: '#2ecc71',
-  COMPLETED: '#27ae60',
-  CANCELLED_BY_RIDER: '#e94560',
-  CANCELLED_BY_DRIVER: '#e94560',
-  EXPIRED: '#888',
-  DISPUTED: '#e67e22',
+  REQUESTED: '#c5a059',
+  DRIVER_ASSIGNED: '#1a1a2e',
+  DRIVER_ARRIVING: '#1a1a2e',
+  DRIVER_ARRIVED: '#111111',
+  PIN_VERIFIED: '#111111',
+  IN_PROGRESS: '#111111',
+  COMPLETED: '#2d4a3e',
+  CANCELLED_BY_RIDER: '#b42318',
+  CANCELLED_BY_DRIVER: '#b42318',
+  EXPIRED: '#6b5d45',
+  DISPUTED: '#6b5d45',
 };
 
 export default function ActiveTripScreen({ route, navigation }: Props) {
@@ -173,7 +174,7 @@ export default function ActiveTripScreen({ route, navigation }: Props) {
   if (loading) {
     return (
       <SafeAreaView style={styles.center}>
-        <ActivityIndicator size="large" color="#e94560" />
+        <ActivityIndicator size="large" color="#111111" />
         <Text style={styles.loadingText}>Loading trip…</Text>
       </SafeAreaView>
     );
@@ -202,7 +203,13 @@ export default function ActiveTripScreen({ route, navigation }: Props) {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll}>
-
+        <View style={styles.brandBlock}>
+          <Image
+            source={require('../../../assets/brand/rydalux-logo-black.png')}
+            style={styles.brandLogo}
+          />
+        </View>
+        
         {/* Status badge */}
         <View style={[styles.statusBadge, { backgroundColor: statusColor + '18' }]}>
           <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
@@ -277,7 +284,7 @@ export default function ActiveTripScreen({ route, navigation }: Props) {
             disabled={cancelling}
           >
             {cancelling
-              ? <ActivityIndicator color="#e94560" />
+              ? <ActivityIndicator color="#b42318" />
               : <Text style={styles.cancelText}>Cancel Ride</Text>}
           </TouchableOpacity>
         )}
@@ -305,56 +312,58 @@ function RouteRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#fff' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: '#fff' },
+  safe: { flex: 1, backgroundColor: '#f4f1eb' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: '#f4f1eb' },
   scroll: { padding: 20, paddingBottom: 40 },
-  loadingText: { marginTop: 12, color: '#888', fontSize: 15 },
-  errorText: { color: '#e94560', fontSize: 15, textAlign: 'center', marginBottom: 16 },
-  retryBtn: { padding: 12, backgroundColor: '#e94560', borderRadius: 10 },
+  brandBlock: { marginBottom: 24, alignItems: 'center' },
+  brandLogo: { width: 120, height: 34, resizeMode: 'contain' },
+  loadingText: { marginTop: 12, color: '#6b5d45', fontSize: 15 },
+  errorText: { color: '#b42318', fontSize: 15, textAlign: 'center', marginBottom: 16 },
+  retryBtn: { padding: 12, backgroundColor: '#111111', borderRadius: 10 },
   retryText: { color: '#fff', fontWeight: '700' },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 8,
     marginBottom: 8,
   },
   statusDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
   statusText: { fontSize: 15, fontWeight: '700' },
-  ref: { fontSize: 12, color: '#aaa', marginBottom: 16, marginLeft: 2 },
+  ref: { fontSize: 12, color: '#6b5d45', marginBottom: 16, marginLeft: 2 },
   card: {
-    backgroundColor: '#f7f7fb',
-    borderRadius: 14,
+    backgroundColor: '#fafafa',
+    borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#ebebf5',
+    borderColor: '#d1c7b7',
   },
-  cardTitle: { fontSize: 11, fontWeight: '700', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
+  cardTitle: { fontSize: 11, fontWeight: '700', color: '#6b5d45', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
   routeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  routeLabel: { fontSize: 12, color: '#888', fontWeight: '600', width: 40 },
+  routeLabel: { fontSize: 12, color: '#6b5d45', fontWeight: '600', width: 40 },
   routeValue: { fontSize: 15, color: '#1a1a2e', fontWeight: '600', flex: 1, textAlign: 'right' },
-  routeDivider: { height: 1, backgroundColor: '#e8e8f0', marginVertical: 10 },
+  routeDivider: { height: 1, backgroundColor: '#d1c7b7', marginVertical: 10 },
   fareRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  fareLabel: { fontSize: 14, color: '#555' },
+  fareLabel: { fontSize: 14, color: '#6b5d45' },
   fareTotal: { fontSize: 22, fontWeight: '800', color: '#1a1a2e' },
   pinCard: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 14,
+    backgroundColor: '#111111',
+    borderRadius: 12,
     padding: 20,
     marginBottom: 12,
     alignItems: 'center',
   },
-  pinTitle: { fontSize: 13, fontWeight: '700', color: '#aab0c6', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
-  pinSub: { fontSize: 12, color: '#7a829c', marginBottom: 14, textAlign: 'center' },
+  pinTitle: { fontSize: 13, fontWeight: '700', color: '#c5a059', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
+  pinSub: { fontSize: 12, color: '#f4f1eb', marginBottom: 14, textAlign: 'center' },
   pinCode: { fontSize: 48, fontWeight: '900', color: '#fff', letterSpacing: 12 },
   driverName: { fontSize: 18, fontWeight: '700', color: '#1a1a2e', marginBottom: 4 },
-  driverPhone: { fontSize: 14, color: '#555', marginBottom: 10 },
-  vehicleRow: { backgroundColor: '#eef0f8', borderRadius: 8, padding: 10, marginTop: 4 },
-  vehicleText: { fontSize: 13, color: '#444', marginBottom: 2 },
+  driverPhone: { fontSize: 14, color: '#6b5d45', marginBottom: 10 },
+  vehicleRow: { backgroundColor: '#f0ede4', borderRadius: 8, padding: 10, marginTop: 4 },
+  vehicleText: { fontSize: 13, color: '#6b5d45', marginBottom: 2 },
   vehiclePlate: { fontSize: 16, fontWeight: '800', color: '#1a1a2e', letterSpacing: 2 },
   sosBtn: {
-    backgroundColor: '#dc2626',
+    backgroundColor: '#b42318',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
@@ -362,17 +371,17 @@ const styles = StyleSheet.create({
   },
   sosText: { color: '#fff', fontSize: 16, fontWeight: '800' },
   cancelBtn: {
-    backgroundColor: '#fff',
+    backgroundColor: 'transparent',
     borderWidth: 1.5,
-    borderColor: '#e94560',
+    borderColor: '#b42318',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
     marginTop: 8,
   },
   btnDisabled: { opacity: 0.6 },
-  cancelText: { color: '#e94560', fontSize: 16, fontWeight: '700' },
-  bookAgainBtn: { backgroundColor: '#e94560', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 8 },
+  cancelText: { color: '#b42318', fontSize: 16, fontWeight: '700' },
+  bookAgainBtn: { backgroundColor: '#111111', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 8 },
   bookAgainText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  errorInline: { color: '#e94560', fontSize: 13, marginTop: 10, textAlign: 'center' },
+  errorInline: { color: '#b42318', fontSize: 13, marginTop: 10, textAlign: 'center' },
 });
