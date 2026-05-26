@@ -7,6 +7,9 @@ import { UpdateTripLocationDto } from './dto/update-trip-location.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { DriverOnlyGuard } from '../auth/driver-only.guard';
 import { RiderOnlyGuard } from '../auth/rider-only.guard';
+import { AdminOnlyGuard } from '../auth/admin-only.guard';
+import { Permissions } from '../auth/permissions.decorator';
+import { PermissionsGuard } from '../auth/permissions.guard';
 
 const RIDER_ALLOWED_TRANSITIONS = new Set([
   'QUOTED',
@@ -70,6 +73,8 @@ export class TripsController {
   }
 
   @Post(':id/dispatch')
+  @UseGuards(JwtAuthGuard, AdminOnlyGuard, PermissionsGuard)
+  @Permissions('OPERATIONS_MANAGER')
   async dispatch(@Param('id') id: string) {
     return this.tripsService.dispatchTrip(id);
   }

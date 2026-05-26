@@ -11,6 +11,35 @@ import { PaymentMethodDto } from './dto/payment-method.dto';
 import { AccountDeletionRequestDto } from './dto/account-deletion-request.dto';
 import { MAX_OTP_ATTEMPTS, OTP_CODE_EXPIRES_IN_MINUTES } from '../auth/constants';
 
+const UNSAFE_PAYMENT_METHOD_KEYS = new Set([
+  'pan',
+  'cardnumber',
+  'number',
+  'cvv',
+  'cvc',
+  'expiry',
+  'expmonth',
+  'expyear',
+  'pin',
+  'trackdata',
+  'magneticstripe',
+]);
+
+const SAFE_PAYMENT_METHOD_DATA_KEYS = new Set([
+  'authorizationcode',
+  'bank',
+  'brand',
+  'cardtype',
+  'channel',
+  'customercode',
+  'last4',
+  'providercustomerid',
+  'providermethod',
+  'reference',
+  'reusable',
+  'token',
+]);
+
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -268,6 +297,8 @@ export class UsersService {
   }
 
   async addPaymentMethod(userId: string, payload: PaymentMethodDto) {
+    this.validateTokenizedPaymentMethod(payload);
+
     const updatedUser = await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -306,6 +337,48 @@ export class UsersService {
 
   private generateNumericCode() {
     return Math.floor(100000 + Math.random() * 900000).toString();
+  }
+
+  private validateTokenizedPaymentMethod(payload: PaymentMethodDto) {
+    if (!payload.provider || !/^[a-z0-9_-]{2,40}$/i.test(payload.provider)) {
+      throw new BadRequestException('Payment provider is invalid.');
+    }
+
+    const data = payload.data;
+    if (!data || Array.isArray(data) || typeof data !== 'object') {
+      throw new BadRequestException('Payment method data must be tokenized provider metadata.');
+    }
+
+    const entries = Object.entries(data);
+    if (entries.length === 0) {
+      throw new BadRequestException('Payment method data is required.');
+    }
+
+    for (const [key, value] of entries) {
+      const normalizedKey = key.replace(/[^a-z0-9]/gi, '').toLowerCase();
+      if (UNSAFE_PAYMENT_METHOD_KEYS.has(normalizedKey)) {
+        throw new BadRequestException('Raw card data must not be submitted or stored.');
+      }
+      if (!SAFE_PAYMENT_METHOD_DATA_KEYS.has(normalizedKey)) {
+        throw new BadRequestException(`Unsupported payment method field: ${key}`);
+      }
+      if (
+        value !== null &&
+        typeof value !== 'string' &&
+        typeof value !== 'boolean'
+      ) {
+        throw new BadRequestException(`Unsupported payment method value for field: ${key}`);
+      }
+    }
+
+    const hasTokenReference = entries.some(([key, value]) => {
+      const normalizedKey = key.replace(/[^a-z0-9]/gi, '').toLowerCase();
+      return ['token', 'reference', 'authorizationcode'].includes(normalizedKey) && typeof value === 'string' && value.trim().length > 0;
+    });
+
+    if (!hasTokenReference) {
+      throw new BadRequestException('Payment method must include a provider token, reference, or authorization code.');
+    }
   }
 
   private async logAuditEvent(actorId: string, action: string, entityId: string, details: Record<string, unknown>) {

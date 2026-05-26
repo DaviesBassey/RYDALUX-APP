@@ -51,4 +51,8 @@ describe('HealthController (e2e)', () => {
     expect(response.body.checks).toHaveProperty('database');
     expect(response.body.checks).toHaveProperty('redis');
   });
+
+  it('/trips/:id/dispatch (POST) requires authentication', async () => {
+    await request(app.getHttpServer()).post('/trips/trip-1/dispatch').expect(401);
+  });
 });

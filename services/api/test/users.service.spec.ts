@@ -108,4 +108,44 @@ describe('UsersService', () => {
       data: expect.objectContaining({ action: 'ACCOUNT_DELETION_REQUESTED' })
     }));
   });
+
+  it('should reject payment method payloads containing raw card data', async () => {
+    await expect(usersService.addPaymentMethod('user-5', {
+      provider: 'paystack',
+      data: {
+        cardNumber: '4084084084084081',
+        cvv: '123',
+        token: 'AUTH_tokenized'
+      }
+    })).rejects.toThrow('Raw card data must not be submitted or stored.');
+
+    expect(mockPrisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('should store safe tokenized payment method metadata', async () => {
+    const paymentMethod = {
+      provider: 'paystack',
+      data: {
+        authorizationCode: 'AUTH_tokenized',
+        last4: '4081',
+        cardType: 'visa',
+        bank: 'TEST BANK',
+        reusable: true
+      },
+      nickname: 'Primary card'
+    };
+    mockPrisma.user.update.mockResolvedValue({ id: 'user-6', paymentMethod });
+    mockPrisma.auditLog.create.mockResolvedValue({});
+
+    const result = await usersService.addPaymentMethod('user-6', paymentMethod);
+
+    expect(result).toEqual({ success: true, paymentMethod });
+    expect(mockPrisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-6' },
+      data: { paymentMethod }
+    });
+    expect(mockPrisma.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ action: 'PAYMENT_METHOD_ADDED' })
+    }));
+  });
 });
