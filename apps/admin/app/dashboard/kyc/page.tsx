@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { api, KycItem } from '@/lib/api';
+import { PageHeader } from '@/lib/components/PageHeader';
+import { formatDate, maskEmail } from '@/lib/utils/formats';
 
 export default function KycReviewPage() {
   const [items, setItems] = useState<KycItem[]>([]);
@@ -42,56 +44,56 @@ export default function KycReviewPage() {
 
   return (
     <div>
-      <h1 style={{ margin: '0 0 24px', fontSize: 28, fontWeight: 700 }}>KYC Review</h1>
-      {error && <div style={{ marginBottom: 16, padding: 12, background: '#fee2e2', color: '#b91c1c', borderRadius: 8 }}>{error}</div>}
-      <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-        <div style={{ padding: '16px 24px', borderBottom: '1px solid #e5e7eb', fontSize: 14, color: '#6b7280' }}>
+      <PageHeader
+        title="KYC Review"
+        description="Review and approve pending KYC submissions"
+      />
+
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
+          {error}
+        </div>
+      )}
+
+      <div className="card">
+        <div className="px-6 py-4 border-b border-gray-200 text-sm text-gray-600">
           Pending: {total}
         </div>
+
         {loading ? (
-          <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>Loading…</div>
+          <div className="p-10 text-center text-gray-600">Loading…</div>
         ) : items.length === 0 ? (
-          <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>No pending KYC checks.</div>
+          <div className="p-10 text-center text-gray-600">No pending KYC checks.</div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+          <table className="w-full">
             <thead>
-              <tr style={{ background: '#f9fafb' }}>
-                <th style={{ textAlign: 'left', padding: '12px 24px', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>User</th>
-                <th style={{ textAlign: 'left', padding: '12px 24px', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>Submitted</th>
-                <th style={{ textAlign: 'left', padding: '12px 24px', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>Provider</th>
-                <th style={{ textAlign: 'right', padding: '12px 24px', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>Actions</th>
+              <tr className="border-b border-gray-200">
+                <th className="text-left py-3 px-6 font-semibold text-gray-700">User</th>
+                <th className="text-left py-3 px-6 font-semibold text-gray-700">Submitted</th>
+                <th className="text-left py-3 px-6 font-semibold text-gray-700">Provider</th>
+                <th className="text-right py-3 px-6 font-semibold text-gray-700">Actions</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item) => (
-                <tr key={item.id}>
-                  <td style={{ padding: '12px 24px', borderBottom: '1px solid #e5e7eb' }}>
-                    <div style={{ fontWeight: 500 }}>
+                <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="py-3 px-6">
+                    <div className="font-medium text-gray-900">
                       {item.user.firstName} {item.user.lastName}
                     </div>
-                    <div style={{ fontSize: 12, color: '#6b7280' }}>{item.user.email}</div>
+                    <div className="text-xs text-gray-600">{maskEmail(item.user.email)}</div>
                   </td>
-                  <td style={{ padding: '12px 24px', borderBottom: '1px solid #e5e7eb', color: '#6b7280' }}>
-                    {new Date(item.submittedAt).toLocaleDateString()}
+                  <td className="py-3 px-6 text-sm text-gray-600">
+                    {formatDate(item.submittedAt)}
                   </td>
-                  <td style={{ padding: '12px 24px', borderBottom: '1px solid #e5e7eb', color: '#6b7280' }}>
+                  <td className="py-3 px-6 text-sm text-gray-600">
                     {item.provider || '—'}
                   </td>
-                  <td style={{ padding: '12px 24px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>
+                  <td className="py-3 px-6 text-right">
                     <button
                       onClick={() => approve(item.userId)}
                       disabled={actionId === item.userId}
-                      style={{
-                        padding: '6px 14px',
-                        borderRadius: 6,
-                        border: 'none',
-                        background: '#111827',
-                        color: '#fff',
-                        fontSize: 13,
-                        fontWeight: 500,
-                        cursor: 'pointer',
-                        opacity: actionId === item.userId ? 0.6 : 1,
-                      }}
+                      className="btn-primary px-3 py-1 text-xs disabled:opacity-60"
                     >
                       {actionId === item.userId ? 'Approving…' : 'Approve'}
                     </button>

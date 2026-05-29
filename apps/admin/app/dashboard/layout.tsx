@@ -5,14 +5,21 @@ import { usePathname, useRouter } from 'next/navigation';
 import { ReactNode } from 'react';
 import { useAuth, RequireAuth } from '@/lib/auth';
 
-const NAV = [
-  { href: '/dashboard', label: 'Overview' },
-  { href: '/dashboard/kyc', label: 'KYC Review' },
-  { href: '/dashboard/drivers', label: 'Driver Documents' },
-  { href: '/dashboard/vehicles', label: 'Vehicle Approval' },
-  { href: '/dashboard/safety', label: 'Safety' },
-  { href: '/dashboard/shipments', label: 'Shipments' },
-  { href: '/dashboard/finance', label: 'Finance' },
+const ALL_NAV_ITEMS = [
+  { href: '/dashboard', label: 'Overview', permission: null },
+  { href: '/dashboard/users', label: 'Users', permission: 'MANAGE_USERS' },
+  { href: '/dashboard/riders', label: 'Riders', permission: 'MANAGE_RIDERS' },
+  { href: '/dashboard/drivers', label: 'Drivers', permission: 'MANAGE_DRIVERS' },
+  { href: '/dashboard/kyc', label: 'KYC Review', permission: 'MANAGE_KYC' },
+  { href: '/dashboard/vehicles', label: 'Vehicles', permission: 'MANAGE_VEHICLES' },
+  { href: '/dashboard/trips', label: 'Trips', permission: 'VIEW_TRIPS' },
+  { href: '/dashboard/payments', label: 'Payments', permission: 'VIEW_PAYMENTS' },
+  { href: '/dashboard/payouts', label: 'Payouts', permission: 'MANAGE_PAYOUTS' },
+  { href: '/dashboard/ledger', label: 'Ledger', permission: 'VIEW_LEDGER' },
+  { href: '/dashboard/support', label: 'Support Tickets', permission: 'MANAGE_SUPPORT' },
+  { href: '/dashboard/safety', label: 'Safety', permission: 'MANAGE_SAFETY' },
+  { href: '/dashboard/audit-logs', label: 'Audit Logs', permission: 'VIEW_AUDIT_LOGS' },
+  { href: '/dashboard/settings', label: 'Settings', permission: 'MANAGE_SETTINGS' },
 ];
 
 function DashboardShell({ children }: { children: ReactNode }) {
@@ -33,7 +40,7 @@ function DashboardShell({ children }: { children: ReactNode }) {
           <p style={{ margin: '8px 0 0', fontSize: 12, color: '#d2b16d' }}>Operations Console</p>
         </div>
         <nav style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {NAV.map((item) => {
+          {ALL_NAV_ITEMS.map((item) => {
             const active = pathname === item.href;
             return (
               <Link

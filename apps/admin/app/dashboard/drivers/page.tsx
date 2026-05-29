@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { api, DriverDocumentItem, VehicleDocumentItem } from '@/lib/api';
+import { PageHeader } from '@/lib/components/PageHeader';
+import { formatDate, maskEmail } from '@/lib/utils/formats';
 
 export default function DriverDocumentsPage() {
   const [driverDocs, setDriverDocs] = useState<DriverDocumentItem[]>([]);
@@ -46,83 +48,115 @@ export default function DriverDocumentsPage() {
 
   return (
     <div>
-      <h1 style={{ margin: '0 0 24px', fontSize: 28, fontWeight: 700 }}>Driver Documents</h1>
-      {error && <div style={{ marginBottom: 16, padding: 12, background: '#fee2e2', color: '#b91c1c', borderRadius: 8 }}>{error}</div>}
+      <PageHeader
+        title="Driver Documents"
+        description="Review and approve driver and vehicle document submissions"
+      />
 
-      <h2 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 600 }}>Driver Documents Pending ({totalDriver})</h2>
-      <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden', marginBottom: 32 }}>
-        {loading ? (
-          <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>Loading…</div>
-        ) : driverDocs.length === 0 ? (
-          <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>No pending driver documents.</div>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-            <thead>
-              <tr style={{ background: '#f9fafb' }}>
-                <th style={{ textAlign: 'left', padding: '12px 24px', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>Driver</th>
-                <th style={{ textAlign: 'left', padding: '12px 24px', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>Type</th>
-                <th style={{ textAlign: 'left', padding: '12px 24px', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>Submitted</th>
-                <th style={{ textAlign: 'right', padding: '12px 24px', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {driverDocs.map((doc) => (
-                <tr key={doc.id}>
-                  <td style={{ padding: '12px 24px', borderBottom: '1px solid #e5e7eb' }}>
-                    <div style={{ fontWeight: 500 }}>{doc.user.firstName} {doc.user.lastName}</div>
-                    <div style={{ fontSize: 12, color: '#6b7280' }}>{doc.user.email}</div>
-                  </td>
-                  <td style={{ padding: '12px 24px', borderBottom: '1px solid #e5e7eb' }}>{doc.documentType}</td>
-                  <td style={{ padding: '12px 24px', borderBottom: '1px solid #e5e7eb', color: '#6b7280' }}>
-                    {new Date(doc.createdAt).toLocaleDateString()}
-                  </td>
-                  <td style={{ padding: '12px 24px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>
-                    <button onClick={() => review(doc.id, 'approve')} disabled={actionId === doc.id} style={{ marginRight: 8, padding: '6px 14px', borderRadius: 6, border: 'none', background: '#111827', color: '#fff', fontSize: 13, cursor: 'pointer', opacity: actionId === doc.id ? 0.6 : 1 }}>Approve</button>
-                    <button onClick={() => review(doc.id, 'reject')} disabled={actionId === doc.id} style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', color: '#374151', fontSize: 13, cursor: 'pointer', opacity: actionId === doc.id ? 0.6 : 1 }}>Reject</button>
-                  </td>
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
+          {error}
+        </div>
+      )}
+
+      <div className="mb-8">
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Driver Documents Pending ({totalDriver})</h2>
+        <div className="card">
+          {loading ? (
+            <div className="p-10 text-center text-gray-600">Loading…</div>
+          ) : driverDocs.length === 0 ? (
+            <div className="p-10 text-center text-gray-600">No pending driver documents.</div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-6 font-semibold text-gray-700">Driver</th>
+                  <th className="text-left py-3 px-6 font-semibold text-gray-700">Type</th>
+                  <th className="text-left py-3 px-6 font-semibold text-gray-700">Submitted</th>
+                  <th className="text-right py-3 px-6 font-semibold text-gray-700">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+              </thead>
+              <tbody>
+                {driverDocs.map((doc) => (
+                  <tr key={doc.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-3 px-6">
+                      <div className="font-medium text-gray-900">{doc.user.firstName} {doc.user.lastName}</div>
+                      <div className="text-xs text-gray-600">{maskEmail(doc.user.email)}</div>
+                    </td>
+                    <td className="py-3 px-6 text-sm text-gray-600">{doc.documentType}</td>
+                    <td className="py-3 px-6 text-sm text-gray-600">{formatDate(doc.createdAt)}</td>
+                    <td className="py-3 px-6 text-right">
+                      <button
+                        onClick={() => review(doc.id, 'approve')}
+                        disabled={actionId === doc.id}
+                        className="btn-primary px-3 py-1 text-xs mr-2 disabled:opacity-60"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => review(doc.id, 'reject')}
+                        disabled={actionId === doc.id}
+                        className="btn-secondary px-3 py-1 text-xs disabled:opacity-60"
+                      >
+                        Reject
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
 
-      <h2 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 600 }}>Vehicle Documents Pending ({totalVehicle})</h2>
-      <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-        {loading ? (
-          <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>Loading…</div>
-        ) : vehicleDocs.length === 0 ? (
-          <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>No pending vehicle documents.</div>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-            <thead>
-              <tr style={{ background: '#f9fafb' }}>
-                <th style={{ textAlign: 'left', padding: '12px 24px', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>Vehicle</th>
-                <th style={{ textAlign: 'left', padding: '12px 24px', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>Type</th>
-                <th style={{ textAlign: 'left', padding: '12px 24px', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>Submitted</th>
-                <th style={{ textAlign: 'right', padding: '12px 24px', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {vehicleDocs.map((doc) => (
-                <tr key={doc.id}>
-                  <td style={{ padding: '12px 24px', borderBottom: '1px solid #e5e7eb' }}>
-                    <div style={{ fontWeight: 500 }}>{doc.vehicle.make} {doc.vehicle.model}</div>
-                    <div style={{ fontSize: 12, color: '#6b7280' }}>{doc.vehicle.registrationNumber}</div>
-                  </td>
-                  <td style={{ padding: '12px 24px', borderBottom: '1px solid #e5e7eb' }}>{doc.documentType}</td>
-                  <td style={{ padding: '12px 24px', borderBottom: '1px solid #e5e7eb', color: '#6b7280' }}>
-                    {new Date(doc.createdAt).toLocaleDateString()}
-                  </td>
-                  <td style={{ padding: '12px 24px', borderBottom: '1px solid #e5e7eb', textAlign: 'right' }}>
-                    <button onClick={() => review(doc.id, 'approve')} disabled={actionId === doc.id} style={{ marginRight: 8, padding: '6px 14px', borderRadius: 6, border: 'none', background: '#111827', color: '#fff', fontSize: 13, cursor: 'pointer', opacity: actionId === doc.id ? 0.6 : 1 }}>Approve</button>
-                    <button onClick={() => review(doc.id, 'reject')} disabled={actionId === doc.id} style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', color: '#374151', fontSize: 13, cursor: 'pointer', opacity: actionId === doc.id ? 0.6 : 1 }}>Reject</button>
-                  </td>
+      <div>
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Vehicle Documents Pending ({totalVehicle})</h2>
+        <div className="card">
+          {loading ? (
+            <div className="p-10 text-center text-gray-600">Loading…</div>
+          ) : vehicleDocs.length === 0 ? (
+            <div className="p-10 text-center text-gray-600">No pending vehicle documents.</div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-6 font-semibold text-gray-700">Vehicle</th>
+                  <th className="text-left py-3 px-6 font-semibold text-gray-700">Type</th>
+                  <th className="text-left py-3 px-6 font-semibold text-gray-700">Submitted</th>
+                  <th className="text-right py-3 px-6 font-semibold text-gray-700">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+              </thead>
+              <tbody>
+                {vehicleDocs.map((doc) => (
+                  <tr key={doc.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-3 px-6">
+                      <div className="font-medium text-gray-900">{doc.vehicle.make} {doc.vehicle.model}</div>
+                      <div className="text-xs text-gray-600">{doc.vehicle.registrationNumber}</div>
+                    </td>
+                    <td className="py-3 px-6 text-sm text-gray-600">{doc.documentType}</td>
+                    <td className="py-3 px-6 text-sm text-gray-600">{formatDate(doc.createdAt)}</td>
+                    <td className="py-3 px-6 text-right">
+                      <button
+                        onClick={() => review(doc.id, 'approve')}
+                        disabled={actionId === doc.id}
+                        className="btn-primary px-3 py-1 text-xs mr-2 disabled:opacity-60"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => review(doc.id, 'reject')}
+                        disabled={actionId === doc.id}
+                        className="btn-secondary px-3 py-1 text-xs disabled:opacity-60"
+                      >
+                        Reject
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
     </div>
   );

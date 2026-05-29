@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { PageHeader } from '@/lib/components/PageHeader';
 
 interface Summary {
   kyc: number;
@@ -64,25 +65,26 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <h1 style={{ margin: '0 0 24px', fontSize: 28, fontWeight: 700 }}>Overview</h1>
-      {error && <div style={{ marginBottom: 16, padding: 12, background: '#fee2e2', color: '#b91c1c', borderRadius: 8 }}>{error}</div>}
+      <PageHeader
+        title="Dashboard"
+        description="Operations overview and pending items"
+      />
+
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
+          {error}
+        </div>
+      )}
+
       {loading ? (
-        <div style={{ color: '#6b7280' }}>Loading…</div>
+        <div className="text-gray-600">Loading…</div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {cards.map((card) => (
-            <Link key={card.label} href={card.href} style={{ textDecoration: 'none' }}>
-              <div
-                style={{
-                  background: '#fff',
-                  borderRadius: 12,
-                  padding: 24,
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-                  transition: 'transform 0.1s',
-                }}
-              >
-                <div style={{ fontSize: 32, fontWeight: 700, color: '#111827' }}>{card.value}</div>
-                <div style={{ fontSize: 14, color: '#6b7280', marginTop: 4 }}>{card.label}</div>
+            <Link key={card.label} href={card.href}>
+              <div className="card hover:shadow-lg transition-shadow cursor-pointer">
+                <div className="text-3xl font-bold text-gray-900">{card.value}</div>
+                <div className="text-sm text-gray-600 mt-2">{card.label}</div>
               </div>
             </Link>
           ))}

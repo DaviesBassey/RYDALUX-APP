@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --brand-dark: #111111;
+    --brand-gold: #d2b16d;
+    --brand-cream: #f4f1eb;
+    --brand-navy: #1a1a2e;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply bg-white text-gray-900 font-sans;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-lg shadow-sm border border-gray-200;
+  }
+
+  .btn-primary {
+    @apply px-4 py-2 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-colors;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 bg-white text-gray-900 border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-colors;
+  }
+
+  .btn-danger {
+    @apply px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors;
+  }
+
+  .input-field {
+    @apply w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all;
+  }
+
+  .table-cell {
+    @apply px-4 py-3 text-sm border-b border-gray-200;
+  }
+
+  .badge-success {
+    @apply inline-block px-3 py-1 text-sm font-medium text-green-800 bg-green-100 rounded-full;
+  }
+
+  .badge-warning {
+    @apply inline-block px-3 py-1 text-sm font-medium text-amber-800 bg-amber-100 rounded-full;
+  }
+
+  .badge-danger {
+    @apply inline-block px-3 py-1 text-sm font-medium text-red-800 bg-red-100 rounded-full;
+  }
+
+  .badge-info {
+    @apply inline-block px-3 py-1 text-sm font-medium text-blue-800 bg-blue-100 rounded-full;
+  }
+
+  .badge-gray {
+    @apply inline-block px-3 py-1 text-sm font-medium text-gray-800 bg-gray-100 rounded-full;
+  }
+}

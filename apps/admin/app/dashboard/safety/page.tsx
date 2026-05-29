@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { api, SosEventItem, IncidentItem } from '@/lib/api';
+import { PageHeader } from '@/lib/components/PageHeader';
+import { StatusBadge } from '@/lib/components/StatusBadge';
+import { formatDateTime } from '@/lib/utils/formats';
 
 export default function SafetyPage() {
   const [sosEvents, setSosEvents] = useState<SosEventItem[]>([]);
@@ -57,91 +60,62 @@ export default function SafetyPage() {
     }
   }
 
-  const statusBadge = (status: string) => {
-    const colors: Record<string, string> = {
-      TRIGGERED: '#dc2626',
-      ACKNOWLEDGED: '#f59e0b',
-      RESOLVED: '#16a34a',
-      OPEN: '#dc2626',
-      INVESTIGATING: '#2563eb',
-      CLOSED: '#6b7280',
-    };
-    const color = colors[status] ?? '#333';
-    return (
-      <span style={{ padding: '2px 8px', borderRadius: 12, background: `${color}18`, color, fontSize: 12, fontWeight: 600 }}>
-        {status}
-      </span>
-    );
-  };
-
   return (
     <div>
-      <h1 style={{ margin: '0 0 24px', fontSize: 28, fontWeight: 700 }}>Safety</h1>
-      {error && <div style={{ marginBottom: 16, padding: 12, background: '#fee2e2', color: '#b91c1c', borderRadius: 8 }}>{error}</div>}
+      <PageHeader
+        title="Safety"
+        description="Monitor SOS events and safety incidents"
+      />
+
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
+          {error}
+        </div>
+      )}
+
       {loading ? (
-        <div style={{ color: '#6b7280' }}>Loading…</div>
+        <div className="text-gray-600">Loading…</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+        <div className="space-y-8">
           <button
             onClick={load}
-            style={{
-              alignSelf: 'flex-start',
-              padding: '8px 14px',
-              borderRadius: 8,
-              border: '1px solid #d1d5db',
-              background: '#fff',
-              color: '#111827',
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
+            className="btn-secondary px-4 py-2 text-sm"
           >
             Refresh
           </button>
-          {/* SOS Events */}
+
           <section>
-            <h2 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 16px' }}>SOS Events ({totals.sos})</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">SOS Events ({totals.sos})</h2>
             {sosEvents.length === 0 ? (
-              <div style={{ padding: 24, background: '#fff', borderRadius: 12, color: '#6b7280' }}>No SOS events.</div>
+              <div className="card text-gray-600">No SOS events.</div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="space-y-3">
                 {sosEvents.map((sos) => (
-                  <div key={sos.id} style={{ background: '#fff', borderRadius: 12, padding: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <div style={{ fontWeight: 700, fontSize: 16 }}>{sos.type}</div>
-                      {statusBadge(sos.status)}
+                  <div key={sos.id} className="card">
+                    <div className="flex justify-between items-center mb-3">
+                      <div className="font-bold text-lg">{sos.type}</div>
+                      <StatusBadge status={sos.status} />
                     </div>
-                    <div style={{ fontSize: 13, color: '#4b5563', marginBottom: 4 }}>
+                    <div className="text-sm text-gray-700 mb-2">
                       User: {sos.user.displayName ?? sos.user.phone ?? sos.user.id}
                     </div>
                     {sos.trip && (
-                      <div style={{ fontSize: 13, color: '#4b5563', marginBottom: 4 }}>
+                      <div className="text-sm text-gray-700 mb-2">
                         Trip: {sos.trip.reference} ({sos.trip.status})
                       </div>
                     )}
-                    <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 8 }}>
+                    <div className="text-sm text-gray-600 mb-2">
                       Location: {sos.latitude.toFixed(5)}, {sos.longitude.toFixed(5)}
                     </div>
-                    {sos.notes && <div style={{ fontSize: 13, color: '#374151', marginBottom: 8 }}>{sos.notes}</div>}
-                    <div style={{ fontSize: 12, color: '#9ca3af' }}>
-                      Triggered: {new Date(sos.triggeredAt).toLocaleString()}
+                    {sos.notes && <div className="text-sm text-gray-700 mb-2">{sos.notes}</div>}
+                    <div className="text-xs text-gray-500 mb-3">
+                      Triggered: {formatDateTime(sos.triggeredAt)}
                     </div>
                     {sos.status !== 'RESOLVED' && (
                       <button
                         onClick={() => handleResolveSos(sos.id)}
                         disabled={actionLoading === `sos:${sos.id}`}
-                        style={{
-                          marginTop: 12,
-                          padding: '8px 16px',
-                          borderRadius: 8,
-                          border: 'none',
-                          background: '#16a34a',
-                          color: '#fff',
-                          fontSize: 13,
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          opacity: actionLoading === `sos:${sos.id}` ? 0.6 : 1,
-                        }}
+                        className="btn-primary px-4 py-2 text-sm disabled:opacity-60"
                       >
                         {actionLoading === `sos:${sos.id}` ? 'Resolving…' : 'Resolve'}
                       </button>
@@ -152,48 +126,38 @@ export default function SafetyPage() {
             )}
           </section>
 
-          {/* Incidents */}
           <section>
-            <h2 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 16px' }}>Incidents ({totals.incidents})</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Incidents ({totals.incidents})</h2>
             {incidents.length === 0 ? (
-              <div style={{ padding: 24, background: '#fff', borderRadius: 12, color: '#6b7280' }}>No incidents reported.</div>
+              <div className="card text-gray-600">No incidents reported.</div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="space-y-3">
                 {incidents.map((inc) => (
-                  <div key={inc.id} style={{ background: '#fff', borderRadius: 12, padding: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <div style={{ fontWeight: 700, fontSize: 16 }}>Severity: {inc.severity}</div>
-                      {statusBadge(inc.status)}
+                  <div key={inc.id} className="card">
+                    <div className="flex justify-between items-center mb-3">
+                      <div className="font-bold text-lg">Severity: {inc.severity}</div>
+                      <StatusBadge status={inc.status} />
                     </div>
-                    <div style={{ fontSize: 13, color: '#4b5563', marginBottom: 4 }}>
+                    <div className="text-sm text-gray-700 mb-2">
                       Reported by: {inc.reportedBy.displayName ?? inc.reportedBy.id}
                     </div>
                     {inc.trip && (
-                      <div style={{ fontSize: 13, color: '#4b5563', marginBottom: 4 }}>
+                      <div className="text-sm text-gray-700 mb-2">
                         Trip: {inc.trip.reference} ({inc.trip.status})
                       </div>
                     )}
-                    <div style={{ fontSize: 13, color: '#374151', marginBottom: 8, whiteSpace: 'pre-wrap' }}>{inc.description}</div>
-                    <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>
-                      Created: {new Date(inc.createdAt).toLocaleString()}
+                    <div className="text-sm text-gray-700 mb-2 whitespace-pre-wrap">{inc.description}</div>
+                    <div className="text-xs text-gray-500 mb-3">
+                      Created: {formatDateTime(inc.createdAt)}
                     </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    <div className="flex gap-2 flex-wrap">
                       {(['OPEN', 'INVESTIGATING', 'RESOLVED', 'CLOSED'] as const).map((st) =>
                         inc.status !== st ? (
                           <button
                             key={st}
                             onClick={() => handleUpdateIncidentStatus(inc.id, st)}
                             disabled={actionLoading === `incident:${inc.id}`}
-                            style={{
-                              padding: '6px 12px',
-                              borderRadius: 6,
-                              border: '1px solid #e5e7eb',
-                              background: '#fff',
-                              fontSize: 12,
-                              fontWeight: 600,
-                              cursor: 'pointer',
-                              opacity: actionLoading === `incident:${inc.id}` ? 0.6 : 1,
-                            }}
+                            className="btn-secondary px-3 py-1 text-xs disabled:opacity-60"
                           >
                             Mark {st}
                           </button>

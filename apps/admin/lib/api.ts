@@ -253,7 +253,6 @@ export const api = {
     fetchJson<{ success: boolean }>(`/admin/drivers/documents/${documentId}/review`, { method: 'POST', body: JSON.stringify({ action, rejectionReason }) }),
   reviewVehicle: (vehicleId: string, action: 'approve' | 'reject' | 'suspend' | 'reactivate', rejectionReason?: string) =>
     fetchJson<{ success: boolean }>(`/admin/vehicles/${vehicleId}/review`, { method: 'POST', body: JSON.stringify({ action, rejectionReason }) }),
-  getAuditLogs: () => fetchJson<AuditLogItem[]>('/admin/audit-logs'),
   getSosEvents: (limit = 20, offset = 0) => fetchJson<SosEventsResponse>(`/admin/sos-events?limit=${limit}&offset=${offset}`),
   getIncidents: (limit = 20, offset = 0) => fetchJson<IncidentsResponse>(`/admin/incidents?limit=${limit}&offset=${offset}`),
   resolveSosEvent: (id: string, notes?: string) => fetchJson<{ success: boolean }>(`/admin/sos-events/${id}/resolve`, { method: 'PATCH', body: JSON.stringify({ notes }) }),
@@ -299,4 +298,51 @@ export const api = {
     fetchJson<any>(`/admin/shipments/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, reason }) }),
   resolveShipment: (id: string, resolution: string, notes?: string) =>
     fetchJson<any>(`/admin/shipments/${id}/resolve`, { method: 'POST', body: JSON.stringify({ resolution, notes }) }),
+
+  // Trips
+  getTrips: (status?: string, limit = 20, offset = 0) =>
+    fetchJson<any>(`/admin/trips?${new URLSearchParams({ ...(status ? { status } : {}), limit: String(limit), offset: String(offset) })}`),
+  getTrip: (id: string) => fetchJson<any>(`/admin/trips/${id}`),
+
+  // Payments (separate from Finance module)
+  getPayments: (status?: string, provider?: string, limit = 20, offset = 0) =>
+    fetchJson<any>(`/admin/payments?${new URLSearchParams({ ...(status ? { status } : {}), ...(provider ? { provider } : {}), limit: String(limit), offset: String(offset) })}`),
+  getPayment: (id: string) => fetchJson<any>(`/admin/payments/${id}`),
+
+  // Ledger
+  getLedgerAccounts: () => fetchJson<any>('/admin/ledger/accounts'),
+  getLedgerTransactions: (limit = 20, offset = 0) =>
+    fetchJson<any>(`/admin/ledger/transactions?limit=${limit}&offset=${offset}`),
+
+  // Payouts (separate from Finance module)
+  getPayouts: (status?: string, limit = 20, offset = 0) =>
+    fetchJson<any>(`/admin/payouts?${new URLSearchParams({ ...(status ? { status } : {}), limit: String(limit), offset: String(offset) })}`),
+  approvePayout: (payoutId: string, notes?: string) =>
+    fetchJson<any>(`/admin/payouts/${payoutId}/approve`, { method: 'POST', body: JSON.stringify({ notes }) }),
+  rejectPayout: (payoutId: string, reason: string) =>
+    fetchJson<any>(`/admin/payouts/${payoutId}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),
+
+  // Support Tickets
+  getSupportTickets: (status?: string, type?: string, priority?: string, limit = 20, offset = 0) =>
+    fetchJson<any>(`/admin/support/tickets?${new URLSearchParams({ ...(status ? { status } : {}), ...(type ? { type } : {}), ...(priority ? { priority } : {}), limit: String(limit), offset: String(offset) })}`),
+  getSupportTicket: (id: string) => fetchJson<any>(`/admin/support/tickets/${id}`),
+  assignSupportTicket: (ticketId: string, adminId: string) =>
+    fetchJson<any>(`/admin/support/tickets/${ticketId}/assign`, { method: 'PATCH', body: JSON.stringify({ adminUserId: adminId }) }),
+  changeSupportTicketStatus: (ticketId: string, status: string) =>
+    fetchJson<any>(`/admin/support/tickets/${ticketId}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  changeSupportTicketPriority: (ticketId: string, priority: string) =>
+    fetchJson<any>(`/admin/support/tickets/${ticketId}/priority`, { method: 'PATCH', body: JSON.stringify({ priority }) }),
+
+  // Audit Logs
+  getAuditLogs: (actor?: string, entity?: string, action?: string, limit = 20, offset = 0) =>
+    fetchJson<any>(`/admin/audit-logs?${new URLSearchParams({ ...(actor ? { actor } : {}), ...(entity ? { entity } : {}), ...(action ? { action } : {}), limit: String(limit), offset: String(offset) })}`),
+
+  // Users & Riders
+  getUsers: (type?: string, limit = 20, offset = 0) =>
+    fetchJson<any>(`/admin/users?${new URLSearchParams({ ...(type ? { type } : {}), limit: String(limit), offset: String(offset) })}`),
+  getRiders: (limit = 20, offset = 0) =>
+    fetchJson<any>(`/admin/riders?limit=${limit}&offset=${offset}`),
+
+  // App Settings
+  getAppSettings: () => fetchJson<any>('/admin/settings'),
 };

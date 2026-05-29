@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { PageHeader } from '@/lib/components/PageHeader';
 
 export default function FinancePage() {
   const [summary, setSummary] = useState<any>(null);
@@ -163,9 +164,13 @@ export default function FinancePage() {
 
   return (
     <div>
-      <h1 style={{ margin: '0 0 24px', fontSize: 28, fontWeight: 700 }}>Finance Dashboard</h1>
-      {error && <div style={{ marginBottom: 16, padding: 12, background: '#fee2e2', color: '#b91c1c', borderRadius: 8 }}>{error}</div>}
-      {actionMessage && <div style={{ marginBottom: 16, padding: 12, background: '#dcfce7', color: '#166534', borderRadius: 8 }}>{actionMessage}</div>}
+      <PageHeader
+        title="Finance Dashboard"
+        description="Monitor payments, payouts, ledger, and reconciliation"
+      />
+
+      {error && <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">{error}</div>}
+      {actionMessage && <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-800 text-sm">{actionMessage}</div>}
       {loading ? (
         <div style={{ color: '#6b7280' }}>Loading…</div>
       ) : (

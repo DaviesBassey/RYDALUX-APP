@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
+import { PageHeader } from '@/lib/components/PageHeader';
 
 interface ShipmentItem {
   id: string;
@@ -168,15 +169,18 @@ export default function ShipmentsPage() {
 
   return (
     <div>
-      <h1 style={{ margin: '0 0 24px', fontSize: 28, fontWeight: 700 }}>Shipments</h1>
+      <PageHeader
+        title="Shipments"
+        description="Monitor and manage shipment deliveries"
+      />
 
       {error && (
-        <div style={{ marginBottom: 16, padding: 12, background: '#fee2e2', color: '#b91c1c', borderRadius: 8 }}>
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
           {error}
         </div>
       )}
       {actionMessage && (
-        <div style={{ marginBottom: 16, padding: 12, background: '#dcfce7', color: '#166534', borderRadius: 8 }}>
+        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-800 text-sm">
           {actionMessage}
         </div>
       )}
