@@ -554,21 +554,31 @@ model LedgerAccount {
 }
 
 model FinancialTransaction {
-  id            String          @id @default(uuid()) @db.Uuid
-  eventType     LedgerEventType
-  reference     String          @unique
-  referenceType String
-  referenceId   String?
-  payment       Payment?        @relation(fields: [paymentId], references: [id])
-  paymentId     String?         @db.Uuid
-  payout        Payout?         @relation(fields: [payoutId], references: [id])
-  payoutId      String?         @db.Uuid
-  trip          Trip?           @relation(fields: [tripId], references: [id])
-  tripId        String?         @db.Uuid
-  currency      String          @default("NGN")
-  amount        Decimal         @db.Decimal(18, 2)
-  metadata      Json?
-  createdAt     DateTime        @default(now())
+  id                    String                @id @default(uuid()) @db.Uuid
+  eventType             LedgerEventType
+  reference             String                @unique
+  referenceType         String
+  referenceId           String?
+  payment               Payment?              @relation(fields: [paymentId], references: [id])
+  paymentId             String?               @db.Uuid
+  payout                Payout?               @relation(fields: [payoutId], references: [id])
+  payoutId              String?               @db.Uuid
+  trip                  Trip?                 @relation(fields: [tripId], references: [id])
+  tripId                String?               @db.Uuid
+  currency              String                @default("NGN")
+  amount                Decimal               @db.Decimal(18, 2)
+  status                String                @default("POSTED")
+  totalDebit            Decimal               @default(0.00) @db.Decimal(18, 2)
+  totalCredit           Decimal               @default(0.00) @db.Decimal(18, 2)
+  postedAt              DateTime              @default(now())
+  reversedAt            DateTime?
+  reversalReference     String?
+  reversalReferenceId   String?               @db.Uuid
+  reversedByAdminId     String?
+  reversal              FinancialTransaction? @relation("Reversals", fields: [reversalReferenceId], references: [id])
+  reversedBy            FinancialTransaction[] @relation("Reversals")
+  metadata              Json?
+  createdAt             DateTime              @default(now())
 
   ledgerEntries      LedgerEntry[]
   walletTransactions WalletTransaction[]
@@ -577,6 +587,8 @@ model FinancialTransaction {
   @@index([paymentId])
   @@index([payoutId])
   @@index([tripId])
+  @@index([status, postedAt])
+  @@index([reversedAt])
 }
 
 model Wallet {
