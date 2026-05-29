@@ -216,19 +216,19 @@ describe('ShipmentsService', () => {
 
   describe('driverAcceptShipment', () => {
     it('rejects if shipment is not in REQUESTED status', async () => {
-      mockPrisma.shipment.findUnique.mockResolvedValue({ id: 'sh-1', tripId: 'trip-1', status: 'DRIVER_EN_ROUTE' });
+      mockPrisma.shipment.findUnique.mockResolvedValue({ id: 'sh-1', tripId: 'trip-1', status: 'DRIVER_ASSIGNED' });
 
       await expect(service.driverAcceptShipment('sh-1', 'driver-1')).rejects.toThrow(BadRequestException);
     });
 
-    it('accepts trip and updates shipment to DRIVER_EN_ROUTE', async () => {
+    it('accepts trip and updates shipment to DRIVER_ASSIGNED', async () => {
       mockPrisma.driverProfile.findUnique.mockResolvedValue({ id: 'dp-1' });
       mockPrisma.shipment.findUnique
         .mockResolvedValueOnce({ id: 'sh-1', tripId: 'trip-1', status: 'REQUESTED' })
         .mockResolvedValueOnce({
         id: 'sh-1',
         tripId: 'trip-1',
-        status: 'DRIVER_EN_ROUTE',
+        status: 'DRIVER_ASSIGNED',
         senderName: 'S',
         recipientName: 'R',
         recipientPhone: '080',
@@ -272,7 +272,7 @@ describe('ShipmentsService', () => {
 
       expect(mockTripsService.driverAcceptTrip).toHaveBeenCalledWith('trip-1', 'driver-1');
       expect(mockPrisma.shipment.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ status: 'DRIVER_EN_ROUTE' }) }),
+        expect.objectContaining({ data: expect.objectContaining({ status: 'DRIVER_ASSIGNED' }) }),
       );
     });
   });
@@ -283,7 +283,7 @@ describe('ShipmentsService', () => {
       mockPrisma.shipment.findUnique.mockResolvedValue({
         id: 'sh-1',
         tripId: 'trip-1',
-        status: 'AT_PICKUP',
+        status: 'PICKUP_ARRIVED',
         trip: { driverProfileId: 'dp-1', status: 'DRIVER_ARRIVED' },
       });
 

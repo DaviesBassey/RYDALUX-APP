@@ -5,11 +5,13 @@ import { TripsModule } from '../trips/trips.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { ShipmentsController } from './shipments.controller';
 import { ShipmentsService } from './shipments.service';
+import { ShipmentOtpService } from './shipment-otp.service';
+import { ShipmentQuoteService } from './shipment-quote.service';
 
 @Module({
   imports: [PrismaModule, FareModule, TripsModule, PaymentsModule],
   controllers: [ShipmentsController],
-  providers: [ShipmentsService],
-  exports: [ShipmentsService],
+  providers: [ShipmentsService, ShipmentOtpService, ShipmentQuoteService],
+  exports: [ShipmentsService, ShipmentOtpService, ShipmentQuoteService],
 })
 export class ShipmentsModule {}

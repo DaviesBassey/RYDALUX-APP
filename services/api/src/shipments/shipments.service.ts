@@ -267,7 +267,7 @@ export class ShipmentsService {
 
     await this.prisma.shipment.update({
       where: { id: shipmentId },
-      data: { status: 'DRIVER_EN_ROUTE' },
+      data: { status: 'DRIVER_ASSIGNED' },
     });
 
     return this.getShipmentById(shipmentId, userId, 'DRIVER');
@@ -280,10 +280,10 @@ export class ShipmentsService {
 
     await this.prisma.shipment.update({
       where: { id: shipmentId },
-      data: { status: 'AT_PICKUP' },
+      data: { status: 'PICKUP_ARRIVED' },
     });
 
-    return { success: true, status: 'AT_PICKUP', tripStatus: 'DRIVER_ARRIVED' };
+    return { success: true, status: 'PICKUP_ARRIVED', tripStatus: 'DRIVER_ARRIVED' };
   }
 
   async confirmPickup(shipmentId: string, userId: string, pin: string) {
