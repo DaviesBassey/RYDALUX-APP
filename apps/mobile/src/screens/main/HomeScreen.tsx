@@ -15,13 +15,6 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { createFareQuote, FareQuote, ServiceType } from '../../api/fare';
 import { createTrip, getActiveTrip } from '../../api/trips';
-import {
-  getShipmentQuote,
-  createShipment,
-  getActiveShipment,
-  ShipmentQuote,
-  PackageSizeClass,
-} from '../../api/shipments';
 import { logoutSession } from '../../api/auth';
 import { clearTokens } from '../../store/authStore';
 import { useAuth } from '../../context/AuthContext';
@@ -29,7 +22,6 @@ import { MainStackParamList } from '../../navigation/MainNavigator';
 
 type Nav = NativeStackNavigationProp<MainStackParamList, 'Home'>;
 
-// Default Lagos test coordinates — change via input fields for other locations
 const DEFAULTS = {
   pickupLat: '6.5244',
   pickupLng: '3.3792',
@@ -40,9 +32,6 @@ const DEFAULTS = {
 };
 
 const SERVICE_TYPES: ServiceType[] = ['REGULAR', 'PREMIUM', 'SCHEDULED'];
-const PACKAGE_SIZES: PackageSizeClass[] = ['SMALL', 'MEDIUM', 'LARGE'];
-
-type BookingMode = 'RIDE' | 'PARCEL';
 
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
@@ -56,31 +45,14 @@ export default function HomeScreen() {
   const [dropoffLng, setDropoffLng] = useState(DEFAULTS.dropoffLng);
   const [serviceType, setServiceType] = useState<ServiceType>('REGULAR');
 
-  const [mode, setMode] = useState<BookingMode>('RIDE');
-  const [packageSize, setPackageSize] = useState<PackageSizeClass>('SMALL');
-  const [senderName, setSenderName] = useState('');
-  const [recipientName, setRecipientName] = useState('');
-  const [recipientPhone, setRecipientPhone] = useState('');
-  const [packageDescription, setPackageDescription] = useState('');
-  const [specialInstructions, setSpecialInstructions] = useState('');
-
   const [fareQuote, setFareQuote] = useState<FareQuote | null>(null);
-  const [shipmentQuote, setShipmentQuote] = useState<ShipmentQuote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [bookLoading, setBookLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Resume active trip or shipment on screen focus
   useFocusEffect(
     useCallback(() => {
-      getActiveShipment()
-        .then((shipment) => {
-          if (shipment) {
-            navigation.navigate('ActiveShipment', { shipmentId: shipment.id });
-            return;
-          }
-          return getActiveTrip();
-        })
+      getActiveTrip()
         .then((trip) => {
           if (trip && 'id' in trip) {
             navigation.navigate('ActiveTrip', { tripId: trip.id });
@@ -93,7 +65,6 @@ export default function HomeScreen() {
   async function handleGetQuote() {
     setError('');
     setFareQuote(null);
-    setShipmentQuote(null);
     const pLat = parseFloat(pickupLat);
     const pLng = parseFloat(pickupLng);
     const dLat = parseFloat(dropoffLat);
@@ -106,25 +77,14 @@ export default function HomeScreen() {
 
     setQuoteLoading(true);
     try {
-      if (mode === 'PARCEL') {
-        const quote = await getShipmentQuote({
-          pickupLatitude: pLat,
-          pickupLongitude: pLng,
-          dropoffLatitude: dLat,
-          dropoffLongitude: dLng,
-          packageSizeClass: packageSize,
-        });
-        setShipmentQuote(quote);
-      } else {
-        const quote = await createFareQuote({
-          pickupLatitude: pLat,
-          pickupLongitude: pLng,
-          dropoffLatitude: dLat,
-          dropoffLongitude: dLng,
-          rideCategory: serviceType,
-        });
-        setFareQuote(quote);
-      }
+      const quote = await createFareQuote({
+        pickupLatitude: pLat,
+        pickupLongitude: pLng,
+        dropoffLatitude: dLat,
+        dropoffLongitude: dLng,
+        rideCategory: serviceType,
+      });
+      setFareQuote(quote);
     } catch (e: any) {
       setError(e?.response?.data?.error?.message ?? e?.response?.data?.message ?? 'Could not get fare quote. Try again.');
     } finally {
@@ -133,36 +93,6 @@ export default function HomeScreen() {
   }
 
   async function handleRequestRide() {
-    if (mode === 'PARCEL') {
-      if (!shipmentQuote) return;
-      if (!senderName.trim() || !recipientName.trim() || !recipientPhone.trim()) {
-        setError('Please fill in sender name, recipient name, and recipient phone.');
-        return;
-      }
-      setError('');
-      setBookLoading(true);
-      try {
-        const shipment = await createShipment({
-          fareQuoteId: shipmentQuote.id,
-          pickupAddress: pickupAddress.trim() || DEFAULTS.pickupAddress,
-          dropoffAddress: dropoffAddress.trim() || DEFAULTS.dropoffAddress,
-          senderName: senderName.trim(),
-          recipientName: recipientName.trim(),
-          recipientPhone: recipientPhone.trim(),
-          packageDescription: packageDescription.trim() || undefined,
-          packageSizeClass: packageSize,
-          specialInstructions: specialInstructions.trim() || undefined,
-        });
-        setShipmentQuote(null);
-        navigation.navigate('ActiveShipment', { shipmentId: shipment.id });
-      } catch (e: any) {
-        setError(e?.response?.data?.error?.message ?? e?.response?.data?.message ?? 'Could not book shipment. Try again.');
-      } finally {
-        setBookLoading(false);
-      }
-      return;
-    }
-
     if (!fareQuote) return;
     setError('');
     setBookLoading(true);
@@ -208,25 +138,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Mode toggle */}
-        <View style={styles.row}>
-          {(['RIDE', 'PARCEL'] as BookingMode[]).map((m) => (
-            <TouchableOpacity
-              key={m}
-              style={[styles.modeChip, mode === m && styles.modeChipActive]}
-              onPress={() => {
-                setMode(m);
-                setFareQuote(null);
-                setShipmentQuote(null);
-                setError('');
-              }}
-            >
-              <Text style={[styles.modeChipText, mode === m && styles.modeChipTextActive]}>{m === 'RIDE' ? 'Ride' : 'Parcel'}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={styles.sectionTitle}>{mode === 'PARCEL' ? 'Send a Parcel' : 'Request a Ride'}</Text>
+        <Text style={styles.sectionTitle}>Request a Ride</Text>
 
         {/* Pickup */}
         <Text style={styles.label}>Pickup address</Text>
@@ -246,61 +158,24 @@ export default function HomeScreen() {
           <TextInput style={[styles.input, styles.half]} value={dropoffLng} onChangeText={setDropoffLng} placeholder="Longitude" placeholderTextColor="#aaa" keyboardType="decimal-pad" />
         </View>
 
-        {/* Service type — ride only */}
-        {mode === 'RIDE' && (
-          <>
-            <Text style={styles.label}>Service type</Text>
-            <View style={styles.row}>
-              {SERVICE_TYPES.map((type) => (
-                <TouchableOpacity
-                  key={type}
-                  style={[styles.chip, serviceType === type && styles.chipActive]}
-                  onPress={() => setServiceType(type)}
-                >
-                  <Text style={[styles.chipText, serviceType === type && styles.chipTextActive]}>{type}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </>
-        )}
-
-        {/* Package size — parcel only */}
-        {mode === 'PARCEL' && (
-          <>
-            <Text style={styles.label}>Package size</Text>
-            <View style={styles.row}>
-              {PACKAGE_SIZES.map((size) => (
-                <TouchableOpacity
-                  key={size}
-                  style={[styles.chip, packageSize === size && styles.chipActive]}
-                  onPress={() => setPackageSize(size)}
-                >
-                  <Text style={[styles.chipText, packageSize === size && styles.chipTextActive]}>{size}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={styles.label}>Sender name</Text>
-            <TextInput style={styles.input} value={senderName} onChangeText={setSenderName} placeholder="Your full name" placeholderTextColor="#aaa" />
-
-            <Text style={styles.label}>Recipient name</Text>
-            <TextInput style={styles.input} value={recipientName} onChangeText={setRecipientName} placeholder="Recipient full name" placeholderTextColor="#aaa" />
-
-            <Text style={styles.label}>Recipient phone</Text>
-            <TextInput style={styles.input} value={recipientPhone} onChangeText={setRecipientPhone} placeholder="Recipient phone number" placeholderTextColor="#aaa" keyboardType="phone-pad" />
-
-            <Text style={styles.label}>Package description</Text>
-            <TextInput style={styles.input} value={packageDescription} onChangeText={setPackageDescription} placeholder="What's inside? (optional)" placeholderTextColor="#aaa" />
-
-            <Text style={styles.label}>Special instructions</Text>
-            <TextInput style={styles.input} value={specialInstructions} onChangeText={setSpecialInstructions} placeholder="Fragile, leave at door, etc. (optional)" placeholderTextColor="#aaa" />
-          </>
-        )}
+        {/* Service type */}
+        <Text style={styles.label}>Service type</Text>
+        <View style={styles.row}>
+          {SERVICE_TYPES.map((type) => (
+            <TouchableOpacity
+              key={type}
+              style={[styles.chip, serviceType === type && styles.chipActive]}
+              onPress={() => setServiceType(type)}
+            >
+              <Text style={[styles.chipText, serviceType === type && styles.chipTextActive]}>{type}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        {/* Fare quote result — ride */}
-        {fareQuote && mode === 'RIDE' && (
+        {/* Fare quote */}
+        {fareQuote && (
           <View style={styles.quoteCard}>
             <Text style={styles.quoteTitle}>Fare Estimate</Text>
             <View style={styles.quoteRow}>
@@ -315,45 +190,11 @@ export default function HomeScreen() {
             {fareQuote.breakdown.promoDiscount > 0 && (
               <QuoteRow label="Promo" value={-fareQuote.breakdown.promoDiscount} accent />
             )}
-            {fareQuote.breakdown.pickupZone && (
-              <Text style={styles.quoteZone}>
-                {fareQuote.breakdown.pickupZone} → {fareQuote.breakdown.dropoffZone}
-              </Text>
-            )}
           </View>
         )}
 
-        {/* Shipment quote result — parcel */}
-        {shipmentQuote && mode === 'PARCEL' && (
-          <View style={styles.quoteCard}>
-            <Text style={styles.quoteTitle}>Shipment Estimate</Text>
-            <View style={styles.quoteRow}>
-              <Text style={styles.quoteLabel}>Total</Text>
-              <Text style={styles.quoteTotal}>₦{shipmentQuote.breakdown.total.toLocaleString()}</Text>
-            </View>
-            <View style={styles.divider} />
-            <QuoteRow label="Base fare" value={shipmentQuote.breakdown.baseFare} />
-            <QuoteRow label="Distance" value={shipmentQuote.breakdown.distanceFare} />
-            <QuoteRow label="Time" value={shipmentQuote.breakdown.timeFare} />
-            <QuoteRow label="Booking fee" value={shipmentQuote.breakdown.bookingFee} />
-            {shipmentQuote.breakdown.promoDiscount > 0 && (
-              <QuoteRow label="Promo" value={-shipmentQuote.breakdown.promoDiscount} accent />
-            )}
-            <View style={styles.divider} />
-            <View style={styles.quoteRow}>
-              <Text style={styles.quoteLabel}>Package size</Text>
-              <Text style={styles.quoteValue}>{shipmentQuote.packageSizeClass}</Text>
-            </View>
-            {shipmentQuote.breakdown.pickupZone && (
-              <Text style={styles.quoteZone}>
-                {shipmentQuote.breakdown.pickupZone} → {shipmentQuote.breakdown.dropoffZone}
-              </Text>
-            )}
-          </View>
-        )}
-
-        {/* Primary action — shown only after a quote is available */}
-        {((mode === 'RIDE' && fareQuote) || (mode === 'PARCEL' && shipmentQuote)) && (
+        {/* Book button */}
+        {fareQuote && (
           <TouchableOpacity
             style={[styles.btn, bookLoading && styles.btnDisabled]}
             onPress={handleRequestRide}
@@ -361,11 +202,11 @@ export default function HomeScreen() {
           >
             {bookLoading
               ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.btnText}>{mode === 'PARCEL' ? 'Book Shipment' : 'Request Trip'}</Text>}
+              : <Text style={styles.btnText}>Request Trip</Text>}
           </TouchableOpacity>
         )}
 
-        {/* Secondary — get/refresh quote */}
+        {/* Get quote button */}
         <TouchableOpacity
           style={[styles.btn, styles.btnSecondary, quoteLoading && styles.btnDisabled]}
           onPress={handleGetQuote}
@@ -373,7 +214,7 @@ export default function HomeScreen() {
         >
           {quoteLoading
             ? <ActivityIndicator color="#111111" />
-            : <Text style={styles.btnTextSecondary}>{(fareQuote || shipmentQuote) ? 'Refresh Quote' : (mode === 'PARCEL' ? 'Get Shipment Quote' : 'Get Fare Quote')}</Text>}
+            : <Text style={styles.btnTextSecondary}>{fareQuote ? 'Refresh Quote' : 'Get Fare Quote'}</Text>}
         </TouchableOpacity>
 
       </ScrollView>
@@ -425,18 +266,6 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: '#111111', borderColor: '#111111' },
   chipText: { fontSize: 13, color: '#555', fontWeight: '600' },
   chipTextActive: { color: '#fff' },
-  modeChip: {
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: '#ddd',
-    marginRight: 10,
-    backgroundColor: '#fff',
-  },
-  modeChipActive: { backgroundColor: '#111111', borderColor: '#111111' },
-  modeChipText: { fontSize: 14, color: '#555', fontWeight: '700' },
-  modeChipTextActive: { color: '#fff' },
   error: { color: '#b42318', fontSize: 13, marginTop: 10 },
   quoteCard: {
     backgroundColor: '#f7f7fb',
@@ -452,7 +281,6 @@ const styles = StyleSheet.create({
   quoteTotal: { fontSize: 22, fontWeight: '800', color: '#1a1a2e' },
   quoteValue: { fontSize: 14, color: '#1a1a2e', fontWeight: '600' },
   quoteAccent: { color: '#2ecc71' },
-  quoteZone: { fontSize: 12, color: '#888', marginTop: 8 },
   divider: { height: 1, backgroundColor: '#e0e0e0', marginVertical: 10 },
   btn: { backgroundColor: '#111111', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 14 },
   btnSecondary: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#111111' },

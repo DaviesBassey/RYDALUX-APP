@@ -1,41 +1,31 @@
 import 'react-native-gesture-handler';
-import React, { useCallback, useEffect, useState } from 'react';
+import React from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 
-import { AuthContext } from './src/context/AuthContext';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
 import AuthNavigator from './src/navigation/AuthNavigator';
 import MainNavigator from './src/navigation/MainNavigator';
 import DriverNavigator from './src/navigation/DriverNavigator';
 import { getTokens } from './src/store/authStore';
+import { useEffect, useState } from 'react';
 
-type AppState = 'loading' | 'auth' | 'rider' | 'driver';
+function AppContent() {
+  const { isLoading, isAuthenticated } = useAuth();
+  const [userType, setUserType] = useState<'RIDER' | 'DRIVER' | null>(null);
+  const [initializing, setInitializing] = useState(true);
 
-export default function App() {
-  const [appState, setAppState] = useState<AppState>('loading');
-
+  // Get userType from stored tokens for routing
   useEffect(() => {
-    getTokens().then(({ accessToken, userType }) => {
-      if (!accessToken) {
-        setAppState('auth');
-      } else if (userType === 'DRIVER') {
-        setAppState('driver');
-      } else {
-        setAppState('rider');
-      }
+    getTokens().then(({ userType: ut }) => {
+      setUserType(ut ?? null);
+      setInitializing(false);
     });
   }, []);
 
-  const login = useCallback(async () => {
-    const { userType } = await getTokens();
-    setAppState(userType === 'DRIVER' ? 'driver' : 'rider');
-  }, []);
-
-  const logout = useCallback(() => setAppState('auth'), []);
-
-  if (appState === 'loading') {
+  if (isLoading || initializing) {
     return (
       <View style={styles.splash}>
         <ActivityIndicator size="large" color="#e94560" />
@@ -44,18 +34,24 @@ export default function App() {
   }
 
   return (
+    <NavigationContainer>
+      {!isAuthenticated ? (
+        <AuthNavigator />
+      ) : userType === 'DRIVER' ? (
+        <DriverNavigator />
+      ) : (
+        <MainNavigator />
+      )}
+    </NavigationContainer>
+  );
+}
+
+export default function App() {
+  return (
     <SafeAreaProvider>
-      <AuthContext.Provider value={{ login, logout }}>
-        <NavigationContainer>
-          {appState === 'auth' ? (
-            <AuthNavigator />
-          ) : appState === 'driver' ? (
-            <DriverNavigator />
-          ) : (
-            <MainNavigator />
-          )}
-        </NavigationContainer>
-      </AuthContext.Provider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
       <StatusBar style="dark" />
     </SafeAreaProvider>
   );
