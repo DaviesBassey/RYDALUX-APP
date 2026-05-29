@@ -249,17 +249,50 @@ enum ServiceType {
 }
 
 enum ShipmentStatus {
+  DRAFT
+  QUOTED
   REQUESTED
-  DRIVER_EN_ROUTE
-  AT_PICKUP
+  DRIVER_ASSIGNED
+  PICKUP_ARRIVED
+  PICKUP_VERIFIED
   IN_TRANSIT
+  DELIVERY_ARRIVED
+  DELIVERY_VERIFIED
   DELIVERED
   CANCELLED
-  FAILED
+  DISPUTED
+  EXPIRED
+}
+
+enum PackageCategory {
+  DOCUMENT
+  SMALL_PACKAGE
+  MEDIUM_PACKAGE
+  LARGE_PACKAGE
+  FRAGILE
+  HIGH_VALUE
+  OTHER
+}
+
+enum ShipmentPriority {
+  STANDARD
+  EXPRESS
+  SCHEDULED
 }
 
 enum ProofType {
   PHOTO_URL
+}
+
+enum ShipmentPhotoType {
+  PACKAGE
+  PICKUP_PROOF
+  DELIVERY_PROOF
+}
+
+enum ShipmentOtpType {
+  PICKUP
+  DELIVERY
 }
 
 model User {
@@ -310,6 +343,7 @@ model User {
   devices                 Device[]
   sessions                AuthSession[]
   accountDeletionRequests AccountDeletionRequest[]
+  sentShipments           Shipment[]               @relation("ShipmentSender")
 }
 
 model RiderProfile {
@@ -325,7 +359,8 @@ model RiderProfile {
   updatedAt            DateTime  @updatedAt
   deletedAt            DateTime?
 
-  trips Trip[]
+  trips        Trip[]
+  sentShipments Shipment[] @relation("ShipmentSenderRider")
 }
 
 model DriverProfile {
@@ -355,6 +390,7 @@ model DriverProfile {
   driverDocuments DriverDocument[] @relation("driverProfileDocuments")
   trips           Trip[]
   activeVehicle   Vehicle?         @relation("ActiveDriverVehicle", fields: [activeVehicleId], references: [id])
+  assignedShipments Shipment[]     @relation("ShipmentDriver")
 
   @@index([currentStatus, isOnline])
 }
@@ -403,6 +439,7 @@ model Vehicle {
   documents        VehicleDocument[]
   activeForDrivers DriverProfile[]   @relation("ActiveDriverVehicle")
   trips            Trip[]
+  shipments        Shipment[]        @relation("ShipmentVehicle")
   supportTickets   SupportTicket[]
 
   @@index([driverProfileId, status])
@@ -580,6 +617,8 @@ model Payment {
   userId                String                 @db.Uuid
   trip                  Trip?                  @relation(fields: [tripId], references: [id])
   tripId                String?                @unique @db.Uuid
+  shipment              Shipment?              @relation("ShipmentPayment", fields: [shipmentId], references: [id])
+  shipmentId            String?                @unique @db.Uuid
   amount                Decimal                @db.Decimal(12, 2)
   currency              String                 @default("NGN")
   provider              String
@@ -597,6 +636,7 @@ model Payment {
 
   @@index([status, provider])
   @@index([userId, createdAt])
+  @@index([shipmentId])
 }
 
 model LedgerAccount {
@@ -839,6 +879,8 @@ model SupportTicket {
   incidentReport   IncidentReport?             @relation(fields: [incidentReportId], references: [id])
   vehicleId        String?                     @db.Uuid
   vehicle          Vehicle?                    @relation(fields: [vehicleId], references: [id])
+  shipmentId       String?                     @db.Uuid
+  shipment         Shipment?                   @relation("ShipmentSupport", fields: [shipmentId], references: [id])
 
   messages         SupportTicketMessage[]
   attachments      SupportTicketAttachment[]
@@ -856,6 +898,7 @@ model SupportTicket {
   @@index([tripId])
   @@index([paymentId])
   @@index([payoutId])
+  @@index([shipmentId])
 }
 
 model SupportTicketMessage {
@@ -1195,30 +1238,177 @@ model DailyCloseReport {
 }
 
 model Shipment {
-  id                  String         @id @default(uuid()) @db.Uuid
-  trip                Trip           @relation(fields: [tripId], references: [id])
-  tripId              String         @unique @db.Uuid
-  status              ShipmentStatus @default(REQUESTED)
-  senderName          String
-  recipientName       String
-  recipientPhone      String
-  packageDescription  String?
-  packageSizeClass    String         @default("SMALL")
-  specialInstructions String?
-  deliveredAt         DateTime?
-  cancelledAt         DateTime?
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
+  id                    String             @id @default(uuid()) @db.Uuid
+  trip                  Trip               @relation(fields: [tripId], references: [id])
+  tripId                String             @unique @db.Uuid
 
-  proofs ShipmentProof[]
+  // Sender information
+  senderUser            User               @relation("ShipmentSender", fields: [senderUserId], references: [id])
+  senderUserId          String             @db.Uuid
+  senderRiderProfile    RiderProfile?      @relation("ShipmentSenderRider", fields: [senderRiderProfileId], references: [id])
+  senderRiderProfileId  String?            @db.Uuid
+
+  // Driver and vehicle
+  driverProfile         DriverProfile?     @relation("ShipmentDriver", fields: [driverProfileId], references: [id])
+  driverProfileId       String?            @db.Uuid
+  vehicle               Vehicle?           @relation("ShipmentVehicle", fields: [vehicleId], references: [id])
+  vehicleId             String?            @db.Uuid
+
+  // Pickup location
+  pickupAddress         String
+  pickupLatitude        Float
+  pickupLongitude       Float
+
+  // Dropoff location
+  dropoffAddress        String
+  dropoffLatitude       Float
+  dropoffLongitude      Float
+
+  // Recipient information
+  recipientName         String
+  recipientPhone        String
+
+  // Package information
+  packageCategory       PackageCategory
+  packageDescription    String?
+  declaredValue         Float?
+  priority              ShipmentPriority   @default(STANDARD)
+
+  // Pricing
+  quotedFare            Float?
+  finalFare             Float?
+
+  // Payment
+  payment               Payment?           @relation("ShipmentPayment")
+  paymentId             String?            @unique @db.Uuid
+
+  // OTP verification
+  pickupOtpHash         String?
+  deliveryOtpHash       String?
+
+  // Verification timestamps
+  pickupVerifiedAt      DateTime?
+  deliveryVerifiedAt    DateTime?
+  deliveredAt           DateTime?
+  cancelledAt           DateTime?
+
+  // Dispute handling
+  disputeReason         String?
+
+  // Status
+  status                ShipmentStatus     @default(DRAFT)
+
+  // Relationships
+  items                 ShipmentItem[]
+  photos                ShipmentPhoto[]
+  trackingEvents        ShipmentTrackingEvent[]
+  otps                  ShipmentOtp[]
+  quote                 ShipmentQuote?
+  proofs                ShipmentProof[]
+  supportTickets        SupportTicket[]    @relation("ShipmentSupport")
+
+  // Timestamps
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
 
   @@index([status])
-  @@index([tripId])
+  @@index([senderUserId])
+  @@index([driverProfileId])
+  @@index([paymentId])
+  @@index([createdAt])
+}
+
+model ShipmentItem {
+  id              String    @id @default(uuid()) @db.Uuid
+  shipment        Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId      String    @db.Uuid
+
+  description     String
+  quantity        Int       @default(1)
+  weight          Float?    // in kg
+  value           Float?
+
+  createdAt       DateTime  @default(now())
+
+  @@index([shipmentId])
+}
+
+model ShipmentPhoto {
+  id              String               @id @default(uuid()) @db.Uuid
+  shipment        Shipment             @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId      String               @db.Uuid
+
+  photoType       ShipmentPhotoType
+  fileUrl         String
+  fileSize        Int?                 // in bytes
+  mimeType        String?
+  uploadedAt      DateTime             @default(now())
+  metadata        Json?
+
+  @@index([shipmentId])
+}
+
+model ShipmentTrackingEvent {
+  id              String    @id @default(uuid()) @db.Uuid
+  shipment        Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId      String    @db.Uuid
+
+  eventType       String    // e.g., "STATUS_CHANGED", "OTP_VERIFIED", "OTP_FAILED", "PROOF_UPLOADED"
+  status          ShipmentStatus
+  location        String?
+  latitude        Float?
+  longitude       Float?
+
+  metadata        Json?
+  createdAt       DateTime  @default(now())
+
+  @@index([shipmentId])
+  @@index([createdAt])
+}
+
+model ShipmentOtp {
+  id              String           @id @default(uuid()) @db.Uuid
+  shipment        Shipment         @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId      String           @db.Uuid
+
+  otpType         ShipmentOtpType
+  otpHash         String           // bcrypt hash, never raw OTP
+  attempts        Int              @default(0)
+  maxAttempts     Int              @default(3)
+  expiresAt       DateTime
+  usedAt          DateTime?
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([shipmentId])
+  @@index([expiresAt])
+  @@unique([shipmentId, otpType])
+}
+
+model ShipmentQuote {
+  id              String    @id @default(uuid()) @db.Uuid
+  shipment        Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId      String    @unique @db.Uuid
+
+  baseFare        Float
+  distanceFare    Float
+  weightFare      Float     @default(0)
+  surgeMultiplier Float     @default(1.0)
+  totalFare       Float
+
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([shipmentId])
 }
 
 model ShipmentProof {
   id          String    @id @default(uuid()) @db.Uuid
-  shipment    Shipment  @relation(fields: [shipmentId], references: [id])
+  shipment    Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
   shipmentId  String    @db.Uuid
   proofType   ProofType @default(PHOTO_URL)
   url         String
