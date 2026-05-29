@@ -178,9 +178,29 @@ enum SosEventType {
 }
 
 enum SosStatus {
-  TRIGGERED
+  OPEN
   ACKNOWLEDGED
+  ESCALATED
   RESOLVED
+  FALSE_ALARM
+}
+
+enum SafetyFlagType {
+  REPEAT_INCIDENT
+  PATTERN_DETECTED
+  HIGH_RISK_BEHAVIOR
+  SUSPICIOUS_ACTIVITY
+}
+
+enum IncidentType {
+  HARASSMENT
+  UNSAFE_DRIVING
+  ASSAULT
+  PAYMENT_DISPUTE
+  VEHICLE_ISSUE
+  SUSPICIOUS_BEHAVIOR
+  EMERGENCY
+  OTHER
 }
 
 enum PromoType {
@@ -245,6 +265,10 @@ model User {
   wallet                  Wallet?
   supportTickets          SupportTicket[]
   trustedContacts         TrustedContact[]
+  safetyFlags             SafetyFlag[]
+  shareTripLinksCreated   ShareTripLink[]
+  safetyCheckIns          SafetyCheckIn[]
+  safetyCheckInsAcknowledged SafetyCheckIn[]       @relation("CheckInAcknowledgedBy")
   ratingsGiven            Rating[]                 @relation("riderRatings")
   ratingsReceived         Rating[]                 @relation("driverRatings")
   auditLogs               AuditLog[]               @relation("actorAuditLogs")
@@ -458,6 +482,8 @@ model Trip {
   incidentReport        IncidentReport?
   rating                Rating?
   sosEvents             SosEvent[]
+  safetyCheckIns        SafetyCheckIn[]
+  shareLink             ShareTripLink?
   shipment              Shipment?
   promoCode             PromoCode?             @relation(fields: [promoCodeId], references: [id])
   promoCodeId           String?                @db.Uuid
@@ -798,7 +824,7 @@ model SosEvent {
   trip        Trip?                                 @relation(fields: [tripId], references: [id])
   tripId      String?                               @db.Uuid
   type        SosEventType
-  status      SosStatus                             @default(TRIGGERED)
+  status      SosStatus                             @default(OPEN)
   latitude    Float
   longitude   Float
   location    Unsupported("geography(Point,4326)")?
@@ -1144,4 +1170,53 @@ model Geofence {
   deletedAt  DateTime?
 
   @@index([cityZoneId, isActive])
+}
+
+model SafetyFlag {
+  id        String          @id @default(uuid()) @db.Uuid
+  user      User            @relation(fields: [userId], references: [id])
+  userId    String          @db.Uuid
+  flagType  SafetyFlagType
+  severity  IncidentSeverity
+  reason    String
+  isActive  Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  resolvedAt DateTime?
+
+  @@index([userId, isActive])
+}
+
+model ShareTripLink {
+  id             String      @id @default(uuid()) @db.Uuid
+  trip           Trip        @relation(fields: [tripId], references: [id])
+  tripId         String      @unique @db.Uuid
+  createdByUser  User        @relation(fields: [createdByUserId], references: [id])
+  createdByUserId String      @db.Uuid
+  shareToken     String      @unique
+  expiresAt      DateTime
+  isExpired      Boolean     @default(false)
+  allowedData    String[]    @default(["location", "driver", "eta"])
+  createdAt      DateTime    @default(now())
+
+  @@index([shareToken])
+  @@index([tripId])
+}
+
+model SafetyCheckIn {
+  id                    String    @id @default(uuid()) @db.Uuid
+  trip                  Trip      @relation(fields: [tripId], references: [id])
+  tripId                String    @db.Uuid
+  user                  User      @relation(fields: [userId], references: [id])
+  userId                String    @db.Uuid
+  type                  String    // LONG_STOP, ROUTE_DEVIATION, MANUAL
+  latitude              Float
+  longitude             Float
+  location              Unsupported("geography(Point,4326)")?
+  acknowledgedAt        DateTime?
+  acknowledgedByUser    User?     @relation("CheckInAcknowledgedBy", fields: [acknowledgedByUserId], references: [id])
+  acknowledgedByUserId  String?   @db.Uuid
+  createdAt             DateTime  @default(now())
+
+  @@index([tripId, createdAt])
+  @@index([userId, createdAt])
 }
