@@ -1,0 +1,10 @@
+export { SupportService } from './support.service';
+export { SupportController } from './support.controller';
+export { SupportAdminController } from './support-admin.controller';
+export { SupportModule } from './support.module';
+export { CreateSupportTicketDto } from './dto/create-support-ticket.dto';
+export { AddTicketReplyDto } from './dto/add-ticket-reply.dto';
+export { ChangeTicketStatusDto } from './dto/change-ticket-status.dto';
+export { ChangeTicketPriorityDto } from './dto/change-ticket-priority.dto';
+export { AssignTicketDto } from './dto/assign-ticket.dto';
+export { RequestUploadDto } from './dto/request-upload.dto';
