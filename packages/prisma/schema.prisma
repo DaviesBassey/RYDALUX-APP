@@ -48,10 +48,12 @@ enum KycStatus {
 }
 
 enum PayoutStatus {
-  PENDING
+  REQUESTED
+  APPROVED
   PROCESSING
   PAID
   FAILED
+  REJECTED
   CANCELLED
 }
 
@@ -276,24 +278,25 @@ model RiderProfile {
 }
 
 model DriverProfile {
-  id                    String                                @id @default(uuid()) @db.Uuid
-  user                  User                                  @relation(fields: [userId], references: [id])
-  userId                String                                @unique @db.Uuid
-  licenseNumber         String?
-  licensePlate          String?
-  licenseExpiry         DateTime?
-  homeCity              String?
-  currentLatitude       Float?
-  currentLongitude      Float?
-  currentLocation       Unsupported("geography(Point,4326)")?
-  lastLocationUpdatedAt DateTime?
-  currentStatus         DriverStatus                          @default(OFFLINE)
-  isOnline              Boolean                               @default(false)
-  averageRating         Decimal?                              @db.Decimal(3, 2)
-  activeVehicleId       String?                               @db.Uuid
-  createdAt             DateTime                              @default(now())
-  updatedAt             DateTime                              @updatedAt
-  deletedAt             DateTime?
+  id                            String                                @id @default(uuid()) @db.Uuid
+  user                          User                                  @relation(fields: [userId], references: [id])
+  userId                        String                                @unique @db.Uuid
+  licenseNumber                 String?
+  licensePlate                  String?
+  licenseExpiry                 DateTime?
+  homeCity                      String?
+  currentLatitude               Float?
+  currentLongitude              Float?
+  currentLocation               Unsupported("geography(Point,4326)")?
+  lastLocationUpdatedAt         DateTime?
+  currentStatus                 DriverStatus                          @default(OFFLINE)
+  isOnline                      Boolean                               @default(false)
+  averageRating                 Decimal?                              @db.Decimal(3, 2)
+  activeVehicleId               String?                               @db.Uuid
+  payoutAccountCooldownUntil    DateTime?
+  createdAt                     DateTime                              @default(now())
+  updatedAt                     DateTime                              @updatedAt
+  deletedAt                     DateTime?
 
   vehicles        Vehicle[]        @relation("DriverVehicles")
   payouts         Payout[]
@@ -317,11 +320,14 @@ model DriverBankAccount {
   provider              String        @default("paystack")
   paystackRecipientCode String?       @unique
   recipientCreatedAt    DateTime?
+  verifiedAt            DateTime?
+  reAuthRequiredAt      DateTime?
   metadata              Json?
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
   deletedAt             DateTime?
 
+  @@index([driverProfileId, verifiedAt])
   @@index([provider, paystackRecipientCode])
 }
 
@@ -657,12 +663,21 @@ model Payout {
   driverProfileId       String                 @db.Uuid
   amount                Decimal                @db.Decimal(18, 2)
   currency              String                 @default("NGN")
-  status                PayoutStatus           @default(PENDING)
+  status                PayoutStatus           @default(REQUESTED)
   provider              String
   providerReference     String?
   providerTransferId    String?
   providerTransferCode  String?                @unique
   transferFailureReason String?
+
+  requestedByDriverId   String?                @db.Uuid
+  requestedAt           DateTime               @default(now())
+  approvedByAdminId     String?                @db.Uuid
+  approvedAt            DateTime?
+  rejectedByAdminId     String?                @db.Uuid
+  rejectedAt            DateTime?
+  rejectionReason       String?
+
   transferInitiatedAt   DateTime?
   scheduledAt           DateTime?
   processedAt           DateTime?
@@ -673,6 +688,7 @@ model Payout {
   financialTransactions FinancialTransaction[]
 
   @@index([driverProfileId, status])
+  @@index([status, createdAt])
   @@index([provider, providerTransferCode])
 }
 

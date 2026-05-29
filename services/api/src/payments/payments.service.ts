@@ -409,7 +409,7 @@ export class PaymentsService {
         skip: offset,
         take: limit,
       }),
-      this.prisma.payout.count({ where: { status: { in: ['PENDING', 'PROCESSING'] } } }),
+      this.prisma.payout.count({ where: { status: { in: ['REQUESTED', 'APPROVED', 'PROCESSING'] } } }),
     ]);
 
     return {
@@ -647,7 +647,7 @@ export class PaymentsService {
       this.prisma.providerEvent.count({ where: { status: 'FAILED' } }),
       this.prisma.providerEvent.count({ where: { status: 'DEAD_LETTER' } }),
       this.prisma.payment.count({ where: { status: 'FAILED' } }),
-      this.prisma.payout.count({ where: { status: { in: ['PENDING', 'PROCESSING'] } } }),
+      this.prisma.payout.count({ where: { status: { in: ['REQUESTED', 'APPROVED', 'PROCESSING'] } } }),
       this.prisma.payout.count({ where: { status: 'FAILED' } }),
       this.prisma.refund.count({ where: { status: 'PROCESSED', ledgerReversedAt: null } }),
     ]);

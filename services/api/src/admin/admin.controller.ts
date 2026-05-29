@@ -23,6 +23,8 @@ import { ResolveDisputeDto, UpdateDisputeAdminDto } from './dto/update-dispute-a
 import { FinanceSchedulerService } from '../scheduler/finance-scheduler.service';
 import { ShipmentsService } from '../shipments/shipments.service';
 import { AdminShipmentStatusDto, AdminResolveShipmentDto } from '../shipments/dto/admin-shipment.dto';
+import { PayoutsService, RejectPayoutDto, MarkPayoutFailedDto } from '../payments/payouts.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, AdminOnlyGuard, PermissionsGuard)
@@ -34,6 +36,8 @@ export class AdminController {
     private readonly paystackService: PaystackService,
     private readonly financeSchedulerService: FinanceSchedulerService,
     private readonly shipmentsService: ShipmentsService,
+    private readonly payoutsService: PayoutsService,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Post('kyc/approve')
@@ -353,6 +357,59 @@ export class AdminController {
   resolveDispute(@Req() req: Request, @Param('id') id: string, @Body() body: ResolveDisputeDto) {
     const user = req.user as any;
     return this.paystackService.resolveDispute(id, user.userId, body.resolution, body.notes);
+  }
+
+  // ── Driver Payout Management (Section 17) ────────────────────────────────────
+
+  @Get('payouts/requests')
+  @Permissions('FINANCE_MANAGER')
+  getPayoutRequests(@Query('status') status?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.payoutsService.getPayoutRequests(status, Number(limit) || 20, Number(offset) || 0);
+  }
+
+  @Post('payouts/:id/approve-section17')
+  @Permissions('FINANCE_MANAGER')
+  approvePayoutSection17(@Req() req: Request, @Param('id') id: string, @Body() body?: { comment?: string }) {
+    const user = req.user as any;
+    return this.prisma.$transaction((tx) =>
+      this.payoutsService.approvePayout(tx, user.userId, id, body?.comment),
+    );
+  }
+
+  @Post('payouts/:id/reject')
+  @Permissions('FINANCE_MANAGER')
+  rejectPayout(@Req() req: Request, @Param('id') id: string, @Body() body: RejectPayoutDto) {
+    const user = req.user as any;
+    return this.prisma.$transaction((tx) =>
+      this.payoutsService.rejectPayout(tx, user.userId, id, body.reason),
+    );
+  }
+
+  @Post('payouts/:id/processing')
+  @Permissions('FINANCE_MANAGER')
+  markPayoutProcessing(@Req() req: Request, @Param('id') id: string) {
+    const user = req.user as any;
+    return this.prisma.$transaction((tx) =>
+      this.payoutsService.markPayoutProcessing(tx, user.userId, id),
+    );
+  }
+
+  @Post('payouts/:id/paid')
+  @Permissions('FINANCE_MANAGER')
+  markPayoutPaid(@Req() req: Request, @Param('id') id: string, @Body() body?: { providerReference?: string }) {
+    const user = req.user as any;
+    return this.prisma.$transaction((tx) =>
+      this.payoutsService.markPayoutPaid(tx, user.userId, id, body?.providerReference),
+    );
+  }
+
+  @Post('payouts/:id/failed')
+  @Permissions('FINANCE_MANAGER')
+  markPayoutFailed(@Req() req: Request, @Param('id') id: string, @Body() body: MarkPayoutFailedDto) {
+    const user = req.user as any;
+    return this.prisma.$transaction((tx) =>
+      this.payoutsService.markPayoutFailed(tx, user.userId, id, body.reason),
+    );
   }
 
   // ── Shipment management ──────────────────────────────────────────────────────

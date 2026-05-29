@@ -589,7 +589,7 @@ export class PaystackService {
 
     await this.prisma.$transaction(async (tx) => {
       const updated = await tx.payout.updateMany({
-        where: { id: payout.id, status: 'PENDING' },
+        where: { id: payout.id, status: 'APPROVED' },
         data: {
           status: 'PROCESSING',
           providerReference: reference,
@@ -869,7 +869,7 @@ export class PaystackService {
     await this.prisma.payout.update({
       where: { id: payout.id },
       data: {
-        status: 'PENDING',
+        status: 'APPROVED',
         providerReference: null,
         providerTransferId: null,
         providerTransferCode: null,
@@ -1241,7 +1241,7 @@ export class PaystackService {
               metadata: { source, payoutStatus: payout.status },
             });
 
-            if (payout.status === 'PENDING' || payout.status === 'FAILED') {
+            if (payout.status === 'REQUESTED' || payout.status === 'FAILED') {
               await tx.payout.update({
                 where: { id: payout.id },
                 data: { status: 'CANCELLED', notes: 'Cancelled after full payment refund.' },
