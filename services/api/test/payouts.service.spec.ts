@@ -446,7 +446,7 @@ describe('PayoutsService - Section 17 Driver Payouts', () => {
           id: 'po-1',
           status: 'REQUESTED',
           amount: '5000.00',
-          driverProfile: { userId: 'driver-1', user: { fullName: 'John Doe' } },
+          driverProfile: { userId: 'driver-1', user: { firstName: 'John', lastName: 'Doe' } },
         },
       ];
 

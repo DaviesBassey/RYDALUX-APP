@@ -302,7 +302,7 @@ export class PaymentsService {
             amount: minorUnitsToDecimal(driverMinor),
             currency: payment.currency,
             provider: payment.provider,
-            status: 'PENDING',
+            status: 'REQUESTED',
           },
         });
 
@@ -397,7 +397,7 @@ export class PaymentsService {
   async listPendingPayouts(limit = 20, offset = 0) {
     const [items, total] = await Promise.all([
       this.prisma.payout.findMany({
-        where: { status: { in: ['PENDING', 'PROCESSING'] } },
+        where: { status: { in: ['REQUESTED', 'APPROVED', 'PROCESSING'] } },
         include: {
           driverProfile: {
             include: {
@@ -446,7 +446,7 @@ export class PaymentsService {
         _sum: { amount: true },
       }),
       this.prisma.payout.aggregate({
-        where: { status: { in: ['PENDING', 'PROCESSING'] } },
+        where: { status: { in: ['REQUESTED', 'APPROVED', 'PROCESSING'] } },
         _sum: { amount: true },
         _count: { id: true },
       }),
@@ -457,26 +457,26 @@ export class PaymentsService {
       }),
     ]);
 
-    const totalCapturedMinor = decimalToMinorUnits(capturedAgg._sum.amount ?? { toString: () => '0' });
-    const totalPendingPayoutsMinor = decimalToMinorUnits(pendingPayoutsAgg._sum.amount ?? { toString: () => '0' });
-    const totalPaidPayoutsMinor = decimalToMinorUnits(paidPayoutsAgg._sum.amount ?? { toString: () => '0' });
+    const totalCapturedMinor = decimalToMinorUnits(capturedAgg._sum?.amount ?? { toString: () => '0' });
+    const totalPendingPayoutsMinor = decimalToMinorUnits(pendingPayoutsAgg._sum?.amount ?? { toString: () => '0' });
+    const totalPaidPayoutsMinor = decimalToMinorUnits(paidPayoutsAgg._sum?.amount ?? { toString: () => '0' });
     const platformRevenueMinor = totalCapturedMinor - totalPaidPayoutsMinor - totalPendingPayoutsMinor;
 
     return {
       totalCaptured: minorUnitsToNumber(totalCapturedMinor),
-      capturedCount: capturedAgg._count.id,
+      capturedCount: capturedAgg._count?.id ?? 0,
       byStatus: byStatus.map((row) => ({
         status: row.status,
-        count: row._count.id,
-        total: minorUnitsToNumber(decimalToMinorUnits(row._sum.amount ?? { toString: () => '0' })),
+        count: row._count?.id ?? 0,
+        total: minorUnitsToNumber(decimalToMinorUnits(row._sum?.amount ?? { toString: () => '0' })),
       })),
       pendingPayouts: {
         total: minorUnitsToNumber(totalPendingPayoutsMinor),
-        count: pendingPayoutsAgg._count.id,
+        count: pendingPayoutsAgg._count?.id ?? 0,
       },
       paidPayouts: {
         total: minorUnitsToNumber(totalPaidPayoutsMinor),
-        count: paidPayoutsAgg._count.id,
+        count: paidPayoutsAgg._count?.id ?? 0,
       },
       platformRevenue: minorUnitsToNumber(platformRevenueMinor),
     };

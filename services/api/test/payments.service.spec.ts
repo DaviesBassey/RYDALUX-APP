@@ -165,7 +165,7 @@ describe('PaymentsService ownership & isolation', () => {
       );
       expect(mockPrisma.payout.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ amount: '400.00', status: 'PENDING' }),
+          data: expect.objectContaining({ amount: '400.00', status: 'REQUESTED' }),
         })
       );
       expect(mockPrisma.financialTransaction.create).toHaveBeenCalledWith(

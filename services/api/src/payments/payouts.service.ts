@@ -1,7 +1,7 @@
-import { Injectable, BadRequestException, ForbiddenException, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { PaymentsService, decimalToMinorUnits, minorUnitsToDecimal, LEDGER_ACCOUNTS } from './payments.service';
+import { PaymentsService, decimalToMinorUnits, minorUnitsToDecimal } from './payments.service';
 import { LedgerService } from './ledger.service';
 
 export type FinancialTx = Prisma.TransactionClient;
@@ -33,8 +33,6 @@ const REAUTH_REQUIRED_DAYS = 30;
 
 @Injectable()
 export class PayoutsService {
-  private readonly logger = new Logger(PayoutsService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly paymentsService: PaymentsService,
@@ -545,7 +543,7 @@ export class PayoutsService {
       payouts: payouts.map((p) => ({
         id: p.id,
         driverId: p.driverProfile.userId,
-        driverName: p.driverProfile.user?.fullName || 'Unknown',
+        driverName: p.driverProfile.user ? `${p.driverProfile.user.firstName || ''} ${p.driverProfile.user.lastName || ''}`.trim() : 'Unknown',
         amount: p.amount.toString(),
         currency: p.currency,
         status: p.status,

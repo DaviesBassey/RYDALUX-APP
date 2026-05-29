@@ -1316,7 +1316,7 @@ export class PaystackService {
       if (payout.status === 'FAILED') throw new BadRequestException('Payout has failed and cannot be approved.');
 
       const paid = await tx.payout.updateMany({
-        where: { id: payoutId, status: { in: ['PENDING', 'PROCESSING'] } },
+        where: { id: payoutId, status: { in: ['APPROVED', 'PROCESSING'] } },
         data: {
           status: 'PAID',
           processedAt: new Date(),
