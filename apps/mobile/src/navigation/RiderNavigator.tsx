@@ -1,28 +1,40 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text } from 'react-native';
 
-// Home tab screens
-import HomeScreen from '../screens/main/HomeScreen';
-import ActiveTripScreen from '../screens/main/ActiveTripScreen';
+import ActiveTripScreen from '../screens/rider/ActiveTripScreen';
+import ConfirmRideScreen from '../screens/rider/ConfirmRideScreen';
+import CreateSupportTicketScreen from '../screens/rider/CreateSupportTicketScreen';
+import DestinationSearchScreen from '../screens/rider/DestinationSearchScreen';
+import DriverAssignedScreen from '../screens/rider/DriverAssignedScreen';
+import FareQuoteScreen from '../screens/rider/FareQuoteScreen';
+import HomeMapScreen from '../screens/rider/HomeMapScreen';
+import PaymentMethodsScreen from '../screens/rider/PaymentMethodsScreen';
+import ProfileScreen from '../screens/rider/ProfileScreen';
+import RideCategorySelectionScreen from '../screens/rider/RideCategorySelectionScreen';
+import SafetyCenterScreen from '../screens/rider/SafetyCenterScreen';
+import SettingsScreen from '../screens/rider/SettingsScreen';
+import ShareTripScreen from '../screens/rider/ShareTripScreen';
+import SosScreen from '../screens/rider/SosScreen';
+import SupportTicketsScreen from '../screens/rider/SupportTicketsScreen';
+import TrustedContactsScreen from '../screens/rider/TrustedContactsScreen';
+import TripCompletedScreen from '../screens/rider/TripCompletedScreen';
+import TripDetailsScreen from '../screens/rider/TripDetailsScreen';
+import TripHistoryScreen from '../screens/rider/TripHistoryScreen';
 
-// Placeholder component for screens not yet created
-function PlaceholderScreen({ name }: { name: string }) {
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
-      <Text style={{ fontSize: 18, fontWeight: '600', color: '#333', marginBottom: 8 }}>{name}</Text>
-      <Text style={{ fontSize: 14, color: '#999' }}>Coming soon</Text>
-    </View>
-  );
-}
+export type RiderLocationParam = {
+  title: string;
+  address: string;
+  lat: number;
+  lng: number;
+};
 
 // Parameter types for all screens
 export type RiderNavigatorParamList = {
   Home: undefined;
   DestinationSearch: { mode: 'pickup' | 'dropoff' };
-  FareQuote: { pickup: { lat: number; lng: number }; dropoff: { lat: number; lng: number } };
+  FareQuote: { pickup: RiderLocationParam; dropoff: RiderLocationParam };
   RideCategory: { fareQuoteId: string };
-  ConfirmRide: { rideCategory: string; tripId: string };
+  ConfirmRide: { fareQuoteId: string; rideCategory: string };
   PaymentMethods: undefined;
   TripHistory: undefined;
   TripDetails: { tripId: string };
@@ -30,7 +42,7 @@ export type RiderNavigatorParamList = {
   TrustedContacts: undefined;
   ShareTrip: { tripId: string };
   SupportTickets: undefined;
-  CreateTicket: undefined;
+  CreateTicket: { tripId?: string } | undefined;
   Profile: undefined;
   Settings: undefined;
   ActiveTrip: { tripId: string };
@@ -46,71 +58,29 @@ export default function RiderNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Group>
         {/* Home Tab */}
-        <Stack.Screen name="Home" component={HomeScreen} />
-        <Stack.Screen
-          name="DestinationSearch"
-          component={() => <PlaceholderScreen name="Destination Search" />}
-        />
-        <Stack.Screen
-          name="FareQuote"
-          component={() => <PlaceholderScreen name="Fare Quote" />}
-        />
-        <Stack.Screen
-          name="RideCategory"
-          component={() => <PlaceholderScreen name="Ride Category" />}
-        />
-        <Stack.Screen
-          name="ConfirmRide"
-          component={() => <PlaceholderScreen name="Confirm Ride" />}
-        />
-        <Stack.Screen
-          name="PaymentMethods"
-          component={() => <PlaceholderScreen name="Payment Methods" />}
-        />
+        <Stack.Screen name="Home" component={HomeMapScreen} />
+        <Stack.Screen name="DestinationSearch" component={DestinationSearchScreen} />
+        <Stack.Screen name="FareQuote" component={FareQuoteScreen} />
+        <Stack.Screen name="RideCategory" component={RideCategorySelectionScreen} />
+        <Stack.Screen name="ConfirmRide" component={ConfirmRideScreen} />
+        <Stack.Screen name="PaymentMethods" component={PaymentMethodsScreen} />
 
         {/* Trips Tab */}
-        <Stack.Screen
-          name="TripHistory"
-          component={() => <PlaceholderScreen name="Trip History" />}
-        />
-        <Stack.Screen
-          name="TripDetails"
-          component={() => <PlaceholderScreen name="Trip Details" />}
-        />
+        <Stack.Screen name="TripHistory" component={TripHistoryScreen} />
+        <Stack.Screen name="TripDetails" component={TripDetailsScreen} />
 
         {/* Safety Tab */}
-        <Stack.Screen
-          name="SafetyCenter"
-          component={() => <PlaceholderScreen name="Safety Center" />}
-        />
-        <Stack.Screen
-          name="TrustedContacts"
-          component={() => <PlaceholderScreen name="Trusted Contacts" />}
-        />
-        <Stack.Screen
-          name="ShareTrip"
-          component={() => <PlaceholderScreen name="Share Trip" />}
-        />
+        <Stack.Screen name="SafetyCenter" component={SafetyCenterScreen} />
+        <Stack.Screen name="TrustedContacts" component={TrustedContactsScreen} />
+        <Stack.Screen name="ShareTrip" component={ShareTripScreen} />
 
         {/* Support Tab */}
-        <Stack.Screen
-          name="SupportTickets"
-          component={() => <PlaceholderScreen name="Support Tickets" />}
-        />
-        <Stack.Screen
-          name="CreateTicket"
-          component={() => <PlaceholderScreen name="Create Ticket" />}
-        />
+        <Stack.Screen name="SupportTickets" component={SupportTicketsScreen} />
+        <Stack.Screen name="CreateTicket" component={CreateSupportTicketScreen} />
 
         {/* Profile Tab */}
-        <Stack.Screen
-          name="Profile"
-          component={() => <PlaceholderScreen name="Profile" />}
-        />
-        <Stack.Screen
-          name="Settings"
-          component={() => <PlaceholderScreen name="Settings" />}
-        />
+        <Stack.Screen name="Profile" component={ProfileScreen} />
+        <Stack.Screen name="Settings" component={SettingsScreen} />
       </Stack.Group>
 
       {/* Modal screens that overlay */}
@@ -119,18 +89,9 @@ export default function RiderNavigator() {
           name="ActiveTrip"
           component={ActiveTripScreen}
         />
-        <Stack.Screen
-          name="TripCompleted"
-          component={() => <PlaceholderScreen name="Trip Completed" />}
-        />
-        <Stack.Screen
-          name="DriverAssigned"
-          component={() => <PlaceholderScreen name="Driver Assigned" />}
-        />
-        <Stack.Screen
-          name="SOS"
-          component={() => <PlaceholderScreen name="SOS" />}
-        />
+        <Stack.Screen name="TripCompleted" component={TripCompletedScreen} />
+        <Stack.Screen name="DriverAssigned" component={DriverAssignedScreen} />
+        <Stack.Screen name="SOS" component={SosScreen} />
       </Stack.Group>
     </Stack.Navigator>
   );

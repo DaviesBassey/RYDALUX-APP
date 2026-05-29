@@ -15,6 +15,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { requestOtp } from '../../api/auth';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
+import { validatePhone } from '../../utils/validation';
 
 type Nav = NativeStackNavigationProp<AuthStackParamList, 'Phone'>;
 type Intent = 'RIDER' | 'DRIVER';
@@ -28,8 +29,8 @@ export default function PhoneScreen() {
 
   async function handleSend() {
     const trimmed = phone.trim();
-    if (!trimmed || !/^\+?[0-9]{8,15}$/.test(trimmed)) {
-      setError('Enter a valid phone number (e.g. +2348012345678)');
+    if (!validatePhone(trimmed)) {
+      setError('Enter a valid Nigerian phone number (e.g. 08012345678)');
       return;
     }
     setError('');
@@ -73,7 +74,7 @@ export default function PhoneScreen() {
 
           <TextInput
             style={styles.input}
-            placeholder="+2348012345678"
+            placeholder="08012345678"
             placeholderTextColor="#aaa"
             keyboardType="phone-pad"
             autoComplete="tel"

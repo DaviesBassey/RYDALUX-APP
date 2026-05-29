@@ -1,6 +1,5 @@
 import 'react-native-gesture-handler';
 import React from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -11,6 +10,7 @@ import MainNavigator from './src/navigation/MainNavigator';
 import DriverNavigator from './src/navigation/DriverNavigator';
 import { getTokens } from './src/store/authStore';
 import { useEffect, useState } from 'react';
+import SplashScreen from './src/screens/auth/SplashScreen';
 
 function AppContent() {
   const { isLoading, isAuthenticated } = useAuth();
@@ -26,11 +26,7 @@ function AppContent() {
   }, []);
 
   if (isLoading || initializing) {
-    return (
-      <View style={styles.splash}>
-        <ActivityIndicator size="large" color="#e94560" />
-      </View>
-    );
+    return <SplashScreen />;
   }
 
   return (
@@ -56,7 +52,3 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  splash: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-});

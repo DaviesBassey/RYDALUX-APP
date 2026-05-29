@@ -19,6 +19,7 @@ import { getOnboardingStatus } from '../../api/driver';
 import { saveTokens } from '../../store/authStore';
 import { useAuth } from '../../context/AuthContext';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
+import { validateOTP } from '../../utils/validation';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Otp'>;
 type Nav = NativeStackNavigationProp<AuthStackParamList, 'Otp'>;
@@ -37,7 +38,7 @@ export default function OtpScreen({ route }: Props) {
   }, [devCode]);
 
   async function handleVerify() {
-    if (!code.trim() || !/^[0-9]{4,6}$/.test(code.trim())) {
+    if (!validateOTP(code.trim())) {
       setError('Enter the 4–6 digit code sent to your phone.');
       return;
     }
@@ -96,6 +97,9 @@ export default function OtpScreen({ route }: Props) {
           <Text style={styles.sub}>
             Code sent to <Text style={styles.phone}>{phone}</Text>
           </Text>
+          <TouchableOpacity onPress={() => setError('Resend code placeholder. OTP resend will be connected to the auth API.')}>
+            <Text style={styles.resendText}>Resend code</Text>
+          </TouchableOpacity>
 
           {devCode ? (
             <View style={styles.devBanner}>
@@ -137,6 +141,7 @@ const styles = StyleSheet.create({
   heading: { fontSize: 22, fontWeight: '700', color: '#1a1a2e', marginBottom: 8 },
   sub: { fontSize: 14, color: '#6b5d45', marginBottom: 20, lineHeight: 20 },
   phone: { fontWeight: '700', color: '#1a1a2e' },
+  resendText: { color: '#c5a059', fontSize: 13, fontWeight: '800', marginBottom: 14 },
   devBanner: {
     backgroundColor: '#fafafa',
     borderRadius: 8,
