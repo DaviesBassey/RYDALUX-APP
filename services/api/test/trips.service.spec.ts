@@ -27,6 +27,12 @@ describe('TripsService state machine', () => {
     getFareQuote: jest.fn()
   };
 
+  const mockPaymentsService: any = {
+    initiateMockPayment: jest.fn(),
+    capturePaymentForTrip: jest.fn(),
+    authorizePaymentForTrip: jest.fn()
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockRedis.set.mockResolvedValue('OK');
@@ -37,7 +43,12 @@ describe('TripsService state machine', () => {
     mockPrisma.auditLog.create.mockResolvedValue({});
     mockPrisma.tripEvent.create.mockResolvedValue({});
 
-    service = new TripsService(mockPrisma as any, mockRedis as any, mockGateway as any, mockFareService as any);
+    // Setup default payment mocks
+    mockPaymentsService.initiateMockPayment.mockResolvedValue({});
+    mockPaymentsService.capturePaymentForTrip.mockResolvedValue({});
+    mockPaymentsService.authorizePaymentForTrip.mockResolvedValue({});
+
+    service = new TripsService(mockPrisma as any, mockRedis as any, mockGateway as any, mockFareService as any, mockPaymentsService as any);
   });
 
   it('allows valid transitions from draft -> quoted -> requested', async () => {

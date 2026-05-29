@@ -3,6 +3,7 @@ import { TripsService } from '../src/trips/trips.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { TripsGateway } from '../src/trips/trips.gateway';
 import { FareService } from '../src/fare/fare.service';
+import { PaymentsService } from '../src/payments/payments.service';
 import { ForbiddenException, BadRequestException } from '@nestjs/common';
 
 describe('Trip PIN integration (module)', () => {
@@ -29,7 +30,8 @@ describe('Trip PIN integration (module)', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: 'REDIS_CLIENT', useValue: { set: jest.fn(), get: jest.fn(), del: jest.fn() } },
         { provide: TripsGateway, useValue: { publishDriverLocation: jest.fn() } },
-        { provide: FareService, useValue: { getFareQuote: jest.fn() } }
+        { provide: FareService, useValue: { getFareQuote: jest.fn() } },
+        { provide: PaymentsService, useValue: { initiateMockPayment: jest.fn(), capturePaymentForTrip: jest.fn(), authorizePaymentForTrip: jest.fn() } }
       ]
     }).compile();
 
