@@ -48,6 +48,7 @@ const STATUS_LABELS: Record<ShipmentStatus, string> = {
   CANCELLED: 'Shipment cancelled',
   DISPUTED: 'Shipment in dispute',
   EXPIRED: 'Shipment expired',
+  FAILED: 'Shipment failed',
 };
 
 export default function DriverActiveShipmentScreen({ route }: { route: any }) {
@@ -488,7 +489,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 }
 
 function Card({ children, style }: { children: React.ReactNode; style?: any }) {
-  return <View style={[styles.cardContainer, style]}>{children}</View>;
+  return <View style={[styles.card, style]}>{children}</View>;
 }
 
 function ActionBtn({
@@ -525,7 +526,7 @@ const styles = StyleSheet.create({
   section: { marginBottom: 16 },
   label: { fontSize: 11, color: '#6b5d45', fontWeight: '800', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
   value: { fontSize: 15, color: '#333', lineHeight: 22 },
-  cardContainer: {
+  card: {
     backgroundColor: '#fffaf1',
     borderRadius: 14,
     padding: 16,
@@ -536,7 +537,7 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 11, fontWeight: '800', color: '#6b5d45', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
   detailRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   detailLabel: { fontSize: 13, color: '#6b5d45', fontWeight: '600' },
-  detailValue: { fontSize: 14, color: '#111', fontWeight: '750', flex: 1, textAlign: 'right' },
+  detailValue: { fontSize: 14, color: '#111', fontWeight: '700', flex: 1, textAlign: 'right' },
   proofRow: { marginBottom: 8, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#e8e8f0' },
   proofType: { fontSize: 12, fontWeight: '700', color: '#1a1a2e', textTransform: 'uppercase' },
   proofUrl: { fontSize: 12, color: '#555', marginTop: 2 },
@@ -589,7 +590,7 @@ const styles = StyleSheet.create({
   },
   errorText: { color: '#e94560', fontSize: 15, textAlign: 'center', marginBottom: 16 },
   retryBtn: { padding: 12, backgroundColor: '#d2b16d', borderRadius: 10, alignSelf: 'center' },
-  retryText: { color: '#fff', fontWeight: '750' },
+  retryText: { color: '#fff', fontWeight: '700' },
   errorInline: { color: '#e94560', fontSize: 13, marginTop: 10, textAlign: 'center' },
   cancelLink: { marginTop: 12, alignItems: 'center' },
   cancelLinkText: { color: '#6b5d45', fontSize: 14, fontWeight: '700' },

@@ -60,7 +60,7 @@ export type DriverLocationParam = {
 export type DriverStackParamList = {
   // Auth/Onboarding
   DriverSplashScreen: undefined;
-  DriverHomeScreen: undefined;
+  DriverHome: undefined;
 
   // Documents
   DocumentsUploadScreen: undefined;
@@ -103,8 +103,8 @@ export type DriverStackParamList = {
   DriverSettingsScreen: undefined;
 
   // Existing screens
-  DriverActiveTripScreen: { tripId?: string };
-  DriverActiveShipmentScreen: { shipmentId?: string };
+  DriverActiveTrip: { tripId?: string } | undefined;
+  DriverActiveShipment: { shipmentId?: string } | undefined;
 };
 
 const Stack = createNativeStackNavigator<DriverStackParamList>();
@@ -115,7 +115,7 @@ export default function DriverNavigator() {
       <Stack.Group>
         {/* Auth/Onboarding */}
         <Stack.Screen name="DriverSplashScreen" component={DriverSplashScreen} />
-        <Stack.Screen name="DriverHomeScreen" component={DriverHomeScreen} />
+        <Stack.Screen name="DriverHome" component={DriverHomeScreen} />
 
         {/* Documents */}
         <Stack.Screen name="DocumentsUploadScreen" component={DocumentsUploadScreen} />
@@ -158,8 +158,8 @@ export default function DriverNavigator() {
         <Stack.Screen name="DriverSettingsScreen" component={DriverSettingsScreen} />
 
         {/* Existing Screens */}
-        <Stack.Screen name="DriverActiveTripScreen" component={DriverActiveTripScreen} />
-        <Stack.Screen name="DriverActiveShipmentScreen" component={DriverActiveShipmentScreen} />
+        <Stack.Screen name="DriverActiveTrip" component={DriverActiveTripScreen} />
+        <Stack.Screen name="DriverActiveShipment" component={DriverActiveShipmentScreen} />
       </Stack.Group>
     </Stack.Navigator>
   );

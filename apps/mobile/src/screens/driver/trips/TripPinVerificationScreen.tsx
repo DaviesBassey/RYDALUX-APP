@@ -52,7 +52,7 @@ export default function TripPinVerificationScreen({ navigation, route }: Props) 
       <View style={styles.pinSection}>
         <Text style={styles.pinLabel}>Trip PIN</Text>
         <TextInput
-          style={[styles.pinInput, error && styles.pinInputError]}
+          style={[styles.pinInput, error ? styles.pinInputError : null]}
           placeholder="0000"
           placeholderTextColor={colors.textSecondary}
           keyboardType="number-pad"

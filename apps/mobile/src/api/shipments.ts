@@ -24,7 +24,8 @@ export type ShipmentStatus =
   | 'DELIVERED'
   | 'CANCELLED'
   | 'DISPUTED'
-  | 'EXPIRED';
+  | 'EXPIRED'
+  | 'FAILED';
 
 export type ShipmentProof = {
   id: string;

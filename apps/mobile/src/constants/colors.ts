@@ -4,6 +4,15 @@ export const colors = {
   secondary: '#d2b16d',
   accent: '#f4f1eb',
 
+  // Semantic Theme Keys
+  background: '#f4f1eb',
+  surface: '#ffffff',
+  text: '#111111',
+  textSecondary: '#777777',
+  border: '#e0e0e0',
+  muted: '#777777',
+  danger: '#ef4444',
+
   // Grayscale
   white: '#ffffff',
   black: '#000000',
