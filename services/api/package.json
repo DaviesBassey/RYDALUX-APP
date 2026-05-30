@@ -11,7 +11,8 @@
     "test:e2e": "jest --config jest-e2e.json",
     "test:all": "jest && npm run test:integration && npm run test:e2e",
     "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\" --fix",
-    "seed:admin": "ts-node prisma/seed.ts"
+    "seed:admin": "ts-node prisma/seed.ts",
+    "seed:staging": "ts-node prisma/seed-staging.ts"
   },
   "dependencies": {
     "@nestjs/axios": "^3.0.0",
