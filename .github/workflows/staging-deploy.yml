@@ -1,0 +1,99 @@
+name: Rydalux Staging Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for deployment'
+        required: false
+        default: 'Manual Staging Deploy'
+
+# Note: Automatic deployment from main is currently disabled.
+# To enable auto-deployment, uncomment the following block:
+#  push:
+#    branches: [ "main" ]
+
+jobs:
+  validate-and-deploy:
+    name: Validate and Deploy to Staging
+    runs-on: ubuntu-latest
+    environment: 
+      name: staging
+      # It is highly recommended to configure "Required Reviewers" for the staging environment in GitHub Settings.
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm --filter @rydulux/prisma generate
+
+      - name: Build API
+        run: pnpm --filter @rydulux/api-services-local build
+
+      - name: Run API Unit Tests
+        run: pnpm --filter @rydulux/api-services-local test -- --detectOpenHandles --runInBand
+
+      - name: Build Admin
+        run: pnpm --filter @rydulux/admin build
+
+      - name: Mobile Typecheck
+        run: pnpm --filter @rydulux/mobile exec tsc -p tsconfig.json --noEmit
+
+      - name: Package API Artifacts (Placeholder)
+        run: |
+          echo "Packaging API backend for deployment..."
+          # Example: docker build -t rydalux/api:staging -f services/api/Dockerfile .
+
+      - name: Package Admin Artifacts (Placeholder)
+        run: |
+          echo "Packaging Web Admin for deployment..."
+          # Example: vercel build --prod (or export for Docker)
+
+      - name: Database Migration Deploy (Safe)
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: |
+          echo "Running prisma migrate deploy for Staging..."
+          # Ensure this is non-destructive (uses migrate deploy, NEVER db push or migrate reset)
+          if [ -n "$DATABASE_URL" ]; then
+            pnpm --filter @rydulux/prisma exec prisma migrate deploy
+          else
+            echo "STAGING_DATABASE_URL is not set. Skipping migration."
+          fi
+
+      - name: Staging Healthcheck (Placeholder)
+        env:
+          STAGING_API_BASE_URL: ${{ secrets.STAGING_API_BASE_URL }}
+        run: |
+          echo "Verifying Staging environment health..."
+          # Example: curl -f ${STAGING_API_BASE_URL}/health/ready
+
+      - name: Notify Deployment Result (Placeholder)
+        run: |
+          echo "Sending deployment notification (e.g., Slack/Discord)..."
+          # Example: curl -X POST -H 'Content-type: application/json' --data '{"text":"Staging deployment completed"}' WEBHOOK_URL

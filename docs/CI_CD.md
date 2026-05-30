@@ -45,9 +45,9 @@ pnpm --filter @rydulux/mobile exec tsc -p tsconfig.json --noEmit
   pnpm --filter @rydulux/api-services-local run test:e2e
   ```
 
-## 6. Staging Deployment Future Plan
-While the CI verifies application code integrity, automated CD to the staging environment is pending.
-The intended flow will securely deploy validated `main` branch artifacts (Docker images for API, Vercel/Next for Admin, Expo EAS for mobile) via isolated deployment workflows.
+## 6. Staging Deployment
+While the CI workflow verifies application code integrity automatically, continuous deployment (CD) to the staging environment is handled by a separate workflow.
+See the [Staging Continuous Deployment (CD) Guide](./STAGING_CD.md) for details on the `.github/workflows/staging-deploy.yml` pipeline, including deployment stages, required secrets, and rollback policies.
 
 ## 7. Secrets Policy
 **Under no circumstances should real production secrets, API keys, or live billing credentials be added to CI variables.** 
