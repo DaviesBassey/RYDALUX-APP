@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ShipmentOtpService } from '../src/shipments/shipment-otp.service';
-import { ShipmentQuoteService } from '../src/shipments/shipment-quote.service';
-import { ShipmentStateMachine } from '../src/shipments/shipment-state-machine';
-import { PrismaService } from '../src/prisma/prisma.service';
+import { ShipmentOtpService } from '../../src/shipments/shipment-otp.service';
+import { ShipmentQuoteService } from '../../src/shipments/shipment-quote.service';
+import { ShipmentStateMachine } from '../../src/shipments/shipment-state-machine';
+import { PrismaService } from '../../src/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 
 describe('ShipmentOtpService', () => {

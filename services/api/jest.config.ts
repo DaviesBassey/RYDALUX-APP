@@ -4,6 +4,7 @@ const config: Config.InitialOptions = {
   moduleFileExtensions: ['js', 'json', 'ts'],
   rootDir: './',
   testRegex: '.*\.spec\.ts$',
+  testPathIgnorePatterns: ['/test/integration/'],
   transform: {
     '^.+\\.ts$': 'ts-jest'
   },
