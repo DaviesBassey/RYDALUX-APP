@@ -1,9 +1,5 @@
 -- Section 17: Driver Payouts System
 
--- Update PayoutStatus enum to add REQUESTED, APPROVED, REJECTED
-ALTER TYPE "PayoutStatus" ADD VALUE 'REQUESTED' BEFORE 'PROCESSING';
-ALTER TYPE "PayoutStatus" ADD VALUE 'APPROVED' BEFORE 'PROCESSING';
-ALTER TYPE "PayoutStatus" ADD VALUE 'REJECTED' AFTER 'FAILED';
 
 -- Update Payout table with new fields for payout request/approval workflow
 ALTER TABLE "Payout" ALTER COLUMN "status" SET DEFAULT 'REQUESTED';
