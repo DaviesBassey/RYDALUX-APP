@@ -21,6 +21,13 @@ import TripCompletedScreen from '../screens/rider/TripCompletedScreen';
 import TripDetailsScreen from '../screens/rider/TripDetailsScreen';
 import TripHistoryScreen from '../screens/rider/TripHistoryScreen';
 
+// Logistics/Shipment Screens
+import ShipmentHomeScreen from '../screens/rider/shipments/ShipmentHomeScreen';
+import CreateShipmentQuoteScreen from '../screens/rider/shipments/CreateShipmentQuoteScreen';
+import ShipmentFareQuoteScreen from '../screens/rider/shipments/ShipmentFareQuoteScreen';
+import ShipmentTrackingScreen from '../screens/rider/shipments/ShipmentTrackingScreen';
+import ShipmentDetailsScreen from '../screens/rider/shipments/ShipmentDetailsScreen';
+
 export type RiderLocationParam = {
   title: string;
   address: string;
@@ -49,6 +56,24 @@ export type RiderNavigatorParamList = {
   TripCompleted: { tripId: string };
   DriverAssigned: { tripId: string };
   SOS: { tripId?: string };
+
+  // Shipments
+  ShipmentHome: undefined;
+  CreateShipmentQuote: undefined;
+  ShipmentFareQuote: {
+    quote: any;
+    pickupAddress: string;
+    dropoffAddress: string;
+    senderName: string;
+    recipientName: string;
+    recipientPhone: string;
+    packageDescription?: string;
+    packageCategory: any;
+    priority: any;
+    specialInstructions?: string;
+  };
+  ShipmentTracking: { shipmentId: string };
+  ShipmentDetails: { shipmentId: string };
 };
 
 const Stack = createNativeStackNavigator<RiderNavigatorParamList>();
@@ -81,6 +106,13 @@ export default function RiderNavigator() {
         {/* Profile Tab */}
         <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
+
+        {/* Logistics/Shipments */}
+        <Stack.Screen name="ShipmentHome" component={ShipmentHomeScreen} />
+        <Stack.Screen name="CreateShipmentQuote" component={CreateShipmentQuoteScreen} />
+        <Stack.Screen name="ShipmentFareQuote" component={ShipmentFareQuoteScreen} />
+        <Stack.Screen name="ShipmentTracking" component={ShipmentTrackingScreen} />
+        <Stack.Screen name="ShipmentDetails" component={ShipmentDetailsScreen} />
       </Stack.Group>
 
       {/* Modal screens that overlay */}

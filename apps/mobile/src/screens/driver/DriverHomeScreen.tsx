@@ -174,11 +174,11 @@ export default function DriverHomeScreen() {
               <Text style={styles.parcelBadgeText}>PARCEL</Text>
             </View>
           </View>
-          {item.fare != null && <Text style={styles.fare}>₦{parseFloat(item.fare.totalFare).toLocaleString()}</Text>}
+          {item.quotedFare != null && <Text style={styles.fare}>₦{parseFloat(String(item.quotedFare)).toLocaleString()}</Text>}
         </View>
-        <Text style={styles.addr} numberOfLines={1}>From: {item.pickup.address}</Text>
-        <Text style={styles.addr} numberOfLines={1}>To: {item.dropoff.address}</Text>
-        <Text style={styles.addr} numberOfLines={1}>Size: {item.packageSizeClass} • Recipient: {item.recipientName}</Text>
+        <Text style={styles.addr} numberOfLines={1}>From: {item.pickupAddress}</Text>
+        <Text style={styles.addr} numberOfLines={1}>To: {item.dropoffAddress}</Text>
+        <Text style={styles.addr} numberOfLines={1}>Size: {item.packageCategory.replace('_', ' ')} • Recipient: {item.recipientName}</Text>
         <TouchableOpacity
           style={[styles.acceptBtn, styles.parcelAcceptBtn, isAccepting && styles.btnDisabled]}
           onPress={() => handleAcceptShipment(item.id)}

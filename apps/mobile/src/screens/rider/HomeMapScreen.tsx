@@ -40,6 +40,9 @@ export default function HomeMapScreen({ navigation }: Props) {
           <View style={styles.cta}>
             <Button title="Ride now" onPress={() => navigation.navigate('DestinationSearch', { mode: 'dropoff' })} />
           </View>
+          <View style={[styles.cta, { marginLeft: 8 }]}>
+            <Button title="Send Package" variant="secondary" onPress={() => navigation.navigate('ShipmentHome')} />
+          </View>
           <View style={styles.sos}>
             <SafetyButton title="SOS" onPress={() => navigation.navigate('SafetyCenter')} />
           </View>

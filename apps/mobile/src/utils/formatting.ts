@@ -95,3 +95,24 @@ export function truncateText(text: string | undefined | null, maxLength: number 
   if (text.length <= maxLength) return text;
   return `${text.slice(0, maxLength)}...`;
 }
+
+export function formatPackageCategory(category: string | undefined | null): string {
+  if (!category) return '-';
+  return category
+    .toLowerCase()
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+export function formatPriority(priority: string | undefined | null): string {
+  if (!priority) return 'Standard';
+  return priority.charAt(0).toUpperCase() + priority.slice(1).toLowerCase();
+}
+
+export function maskPhone(phone: string | undefined | null): string {
+  if (!phone) return '-';
+  const cleaned = phone.replace(/\s+/g, '');
+  if (cleaned.length < 7) return '***-***';
+  return `${cleaned.slice(0, 4)}***${cleaned.slice(-3)}`;
+}

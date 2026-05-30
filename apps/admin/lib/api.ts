@@ -291,6 +291,19 @@ export const api = {
   getLatestDailyCloseReport: () => fetchJson<any>('/admin/finance/daily-close/latest'),
 
   // Shipments
+  listAdminShipments: (status?: string, limit = 20, offset = 0) =>
+    fetchJson<any>(`/admin/shipments?${new URLSearchParams({ ...(status ? { status } : {}), limit: String(limit), offset: String(offset) })}`),
+  getAdminShipment: (id: string) => fetchJson<any>(`/admin/shipments/${id}`),
+  assignShipmentDriver: (id: string, driverId: string) =>
+    fetchJson<any>(`/admin/shipments/${id}/assign-driver`, { method: 'POST', body: JSON.stringify({ driverId }) }),
+  cancelAdminShipment: (id: string, reason?: string) =>
+    fetchJson<any>(`/admin/shipments/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  disputeShipment: (id: string, reason: string) =>
+    fetchJson<any>(`/admin/shipments/${id}/dispute`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  updateShipmentStatus: (id: string, status: string, reason?: string) =>
+    fetchJson<any>(`/admin/shipments/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, reason }) }),
+
+  // Old Aliases for backward compatibility
   getShipments: (status?: string, limit = 20, offset = 0) =>
     fetchJson<any>(`/admin/shipments?${new URLSearchParams({ ...(status ? { status } : {}), limit: String(limit), offset: String(offset) })}`),
   getShipment: (id: string) => fetchJson<any>(`/admin/shipments/${id}`),

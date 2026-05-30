@@ -1,15 +1,30 @@
 import { api } from './client';
 
-export type PackageSizeClass = 'SMALL' | 'MEDIUM' | 'LARGE';
+export type PackageCategory =
+  | 'DOCUMENT'
+  | 'SMALL_PACKAGE'
+  | 'MEDIUM_PACKAGE'
+  | 'LARGE_PACKAGE'
+  | 'FRAGILE'
+  | 'HIGH_VALUE'
+  | 'OTHER';
+
+export type ShipmentPriority = 'STANDARD' | 'EXPRESS' | 'SCHEDULED';
 
 export type ShipmentStatus =
+  | 'DRAFT'
+  | 'QUOTED'
   | 'REQUESTED'
-  | 'DRIVER_EN_ROUTE'
-  | 'AT_PICKUP'
+  | 'DRIVER_ASSIGNED'
+  | 'PICKUP_ARRIVED'
+  | 'PICKUP_VERIFIED'
   | 'IN_TRANSIT'
+  | 'DELIVERY_ARRIVED'
+  | 'DELIVERY_VERIFIED'
   | 'DELIVERED'
   | 'CANCELLED'
-  | 'FAILED';
+  | 'DISPUTED'
+  | 'EXPIRED';
 
 export type ShipmentProof = {
   id: string;
@@ -18,6 +33,26 @@ export type ShipmentProof = {
   notes: string | null;
   submittedBy: string;
   submittedAt: string;
+};
+
+export type ShipmentPhoto = {
+  id: string;
+  photoType: string;
+  fileUrl: string;
+  fileSize: number | null;
+  mimeType: string | null;
+  uploadedAt: string;
+};
+
+export type ShipmentTrackingEvent = {
+  id: string;
+  eventType: string;
+  status: ShipmentStatus;
+  location: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  metadata: any | null;
+  createdAt: string;
 };
 
 export type ShipmentFare = {
@@ -63,16 +98,23 @@ export type Shipment = {
   recipientName: string;
   recipientPhone: string;
   packageDescription: string | null;
-  packageSizeClass: PackageSizeClass;
-  specialInstructions: string | null;
-  pickup: ShipmentLocation;
-  dropoff: ShipmentLocation;
-  fare: ShipmentFare | null;
+  packageCategory: PackageCategory;
+  priority: ShipmentPriority;
+  pickupAddress: string;
+  pickupLatitude: number;
+  pickupLongitude: number;
+  dropoffAddress: string;
+  dropoffLatitude: number;
+  dropoffLongitude: number;
+  quotedFare: number | null;
+  finalFare: number | null;
   payment: { id: string; amount: string; currency: string; status: string } | null;
-  rider: ShipmentPerson | null;
-  driver: ShipmentPerson | null;
-  vehicle: ShipmentVehicle | null;
+  rider?: ShipmentPerson | null;
+  driver?: ShipmentPerson | null;
+  vehicle?: ShipmentVehicle | null;
   proofs: ShipmentProof[];
+  photos?: ShipmentPhoto[];
+  trackingEvents?: ShipmentTrackingEvent[];
   deliveredAt: string | null;
   cancelledAt: string | null;
   createdAt: string;
@@ -81,57 +123,75 @@ export type Shipment = {
 
 export type ShipmentQuote = {
   id: string;
-  breakdown: {
-    baseFare: number;
-    distanceFare: number;
-    timeFare: number;
-    bookingFee: number;
-    surge: number;
-    airportSurcharge: number;
-    promoDiscount: number;
-    total: number;
-    pickupZone: string | null;
-    dropoffZone: string | null;
-  };
+  shipmentId?: string;
+  baseFare: number;
+  distanceFare: number;
+  weightFare: number;
+  surgeMultiplier: number;
+  totalFare: number;
   expiresAt: string;
-  packageSizeClass: PackageSizeClass;
+  acceptedAt?: string | null;
 };
 
 export type ShipmentPin = {
-  pin: string;
-  expiresAt: string;
+  pickupOtp?: string;
+  deliveryOtp?: string;
+  expiresAt?: string;
 };
 
-export async function getShipmentQuote(params: {
+// ── Rider (Customer) Endpoints ───────────────────────────────────────────────
+
+export async function createShipmentQuote(params: {
   pickupLatitude: number;
   pickupLongitude: number;
   dropoffLatitude: number;
   dropoffLongitude: number;
-  packageSizeClass: PackageSizeClass;
-  promoCode?: string;
+  packageCategory: PackageCategory;
+  priority: ShipmentPriority;
+  declaredValue?: number;
+  weight?: number;
 }): Promise<ShipmentQuote> {
   const { data } = await api.post<ShipmentQuote>('/shipments/quote', params);
   return data;
 }
 
+// Support alias for older calls if any
+export async function getShipmentQuote(params: any): Promise<ShipmentQuote> {
+  return createShipmentQuote(params);
+}
+
 export async function createShipment(params: {
-  fareQuoteId: string;
+  quoteId: string;
   pickupAddress: string;
   dropoffAddress: string;
   senderName: string;
   recipientName: string;
   recipientPhone: string;
   packageDescription?: string;
-  packageSizeClass: PackageSizeClass;
+  packageCategory: PackageCategory;
+  priority: ShipmentPriority;
   specialInstructions?: string;
 }): Promise<Shipment> {
   const { data } = await api.post<Shipment>('/shipments', params);
   return data;
 }
 
+export async function listShipments(params?: {
+  status?: ShipmentStatus;
+  limit?: number;
+  offset?: number;
+}): Promise<{ items: Shipment[]; total: number }> {
+  const { data } = await api.get<{ items: Shipment[]; total: number }>('/shipments', { params });
+  return data;
+}
+
 export async function getActiveShipment(): Promise<Shipment | null> {
-  const { data } = await api.get<{ shipment: Shipment | null }>('/shipments/active');
-  return data.shipment;
+  try {
+    const { data } = await api.get<{ shipment: Shipment | null }>('/shipments/active');
+    return data.shipment;
+  } catch {
+    return null;
+  }
 }
 
 export async function getShipment(shipmentId: string): Promise<Shipment> {
@@ -144,74 +204,144 @@ export async function getShipmentCodes(shipmentId: string): Promise<ShipmentPin>
   return data;
 }
 
-export const TERMINAL_SHIPMENT_STATUSES: ShipmentStatus[] = [
-  'DELIVERED',
-  'CANCELLED',
-  'FAILED',
-];
+export async function cancelShipment(shipmentId: string, params?: { reason?: string }): Promise<Shipment> {
+  const { data } = await api.post<Shipment>(`/shipments/${shipmentId}/cancel`, params || {});
+  return data;
+}
 
-export const PIN_VISIBLE_SHIPMENT_STATUSES: ShipmentStatus[] = [
-  'DRIVER_EN_ROUTE',
-  'AT_PICKUP',
-];
+export async function requestShipmentPhotoUpload(
+  shipmentId: string,
+  params: { photoType: string; mimeType?: string; fileSize?: number }
+): Promise<{ uploadUrl: string; photoId: string }> {
+  const { data } = await api.post<{ uploadUrl: string; photoId: string }>(
+    `/shipments/${shipmentId}/photos/request-upload`,
+    params
+  );
+  return data;
+}
 
-export const RIDER_CANCELLABLE_SHIPMENT_STATUSES: ShipmentStatus[] = [
-  'REQUESTED',
-  'DRIVER_EN_ROUTE',
-  'AT_PICKUP',
-];
+export async function createShipmentSupportTicket(
+  shipmentId: string,
+  params: { title: string; description: string; priority?: string }
+): Promise<any> {
+  const { data } = await api.post(`/shipments/${shipmentId}/support-ticket`, params);
+  return data;
+}
 
-// ── Driver ───────────────────────────────────────────────────────────────────
+// ── Driver Endpoints ─────────────────────────────────────────────────────────
 
 export type AvailableShipment = {
   id: string;
   tripId: string;
   reference: string;
   status: ShipmentStatus;
-  packageSizeClass: PackageSizeClass;
+  packageCategory: PackageCategory;
   packageDescription: string | null;
-  recipientName: string;
-  specialInstructions: string | null;
-  pickup: ShipmentLocation;
-  dropoff: ShipmentLocation;
-  fare: { totalFare: string } | null;
+  recipientName: string; // Will be scrubbed/masked by the backend
+  pickupAddress: string;
+  dropoffAddress: string;
+  quotedFare: number | null;
   createdAt: string;
 };
 
-export async function getAvailableShipments(): Promise<{ shipments: AvailableShipment[] }> {
-  const { data } = await api.get<{ shipments: AvailableShipment[] }>('/shipments/driver/available');
+export async function listAvailableShipments(): Promise<{ shipments: AvailableShipment[] }> {
+  const { data } = await api.get<{ shipments: AvailableShipment[] }>('/driver/shipments/available');
   return data;
+}
+
+// Support alias for older driver calls
+export async function getAvailableShipments(): Promise<{ shipments: AvailableShipment[] }> {
+  return listAvailableShipments();
 }
 
 export async function getDriverActiveShipment(): Promise<Shipment | null> {
-  const { data } = await api.get<{ shipment: Shipment | null }>('/shipments/driver/active');
-  return data.shipment;
+  try {
+    const { data } = await api.get<{ shipment: Shipment | null }>('/driver/shipments/active');
+    return data.shipment;
+  } catch {
+    return null;
+  }
+}
+
+export async function getDriverShipment(shipmentId: string): Promise<Shipment> {
+  const { data } = await api.get<Shipment>(`/driver/shipments/${shipmentId}`);
+  return data;
 }
 
 export async function acceptShipment(shipmentId: string): Promise<Shipment> {
-  const { data } = await api.post<Shipment>(`/shipments/${shipmentId}/driver/accept`);
+  const { data } = await api.post<Shipment>(`/driver/shipments/${shipmentId}/accept`);
   return data;
 }
 
-export async function arriveAtPickup(shipmentId: string): Promise<{ success: boolean; status: string; tripStatus: string }> {
-  const { data } = await api.post(`/shipments/${shipmentId}/arrive-pickup`);
+export async function arrivePickup(shipmentId: string): Promise<Shipment> {
+  const { data } = await api.post<Shipment>(`/driver/shipments/${shipmentId}/arrive-pickup`);
   return data;
 }
 
-export async function confirmPickup(shipmentId: string, pin: string): Promise<{ success: boolean; status: string; tripStatus: string }> {
-  const { data } = await api.post(`/shipments/${shipmentId}/confirm-pickup`, { pin });
+// Support alias
+export async function arriveAtPickup(shipmentId: string): Promise<any> {
+  return arrivePickup(shipmentId);
+}
+
+export async function verifyPickupOtp(shipmentId: string, code: string): Promise<Shipment> {
+  const { data } = await api.post<Shipment>(`/driver/shipments/${shipmentId}/verify-pickup-otp`, { code });
   return data;
+}
+
+// Support alias
+export async function confirmPickup(shipmentId: string, code: string): Promise<any> {
+  return verifyPickupOtp(shipmentId, code);
+}
+
+export async function startShipment(shipmentId: string): Promise<Shipment> {
+  const { data } = await api.post<Shipment>(`/driver/shipments/${shipmentId}/start`);
+  return data;
+}
+
+export async function arriveDelivery(shipmentId: string): Promise<Shipment> {
+  const { data } = await api.post<Shipment>(`/driver/shipments/${shipmentId}/arrive-delivery`);
+  return data;
+}
+
+export async function verifyDeliveryOtp(shipmentId: string, code: string): Promise<Shipment> {
+  const { data } = await api.post<Shipment>(`/driver/shipments/${shipmentId}/verify-delivery-otp`, { code });
+  return data;
+}
+
+export async function completeShipment(shipmentId: string): Promise<Shipment> {
+  const { data } = await api.post<Shipment>(`/driver/shipments/${shipmentId}/complete`);
+  return data;
+}
+
+// Support alias
+export async function confirmDelivery(shipmentId: string): Promise<any> {
+  return completeShipment(shipmentId);
 }
 
 export async function submitShipmentProof(
   shipmentId: string,
-  dto: { url: string; proofType?: string; notes?: string }
+  params: { url: string; notes?: string }
 ): Promise<ShipmentProof> {
-  const { data } = await api.post<ShipmentProof>(`/shipments/${shipmentId}/proofs`, dto);
+  const { data } = await api.post<ShipmentProof>(`/driver/shipments/${shipmentId}/proof`, params);
   return data;
 }
 
-export async function confirmDelivery(shipmentId: string): Promise<{ success: boolean; status: string; tripStatus: string; deliveredAt: string }> {
-  const { data } = await api.post(`/shipments/${shipmentId}/confirm-delivery`);
-  return data;
-}
+// Helper arrays & checks
+
+export const TERMINAL_SHIPMENT_STATUSES: ShipmentStatus[] = ['DELIVERED', 'CANCELLED', 'FAILED'];
+
+export const ACTIVE_SHIPMENT_STATUSES: ShipmentStatus[] = [
+  'REQUESTED',
+  'DRIVER_ASSIGNED',
+  'PICKUP_ARRIVED',
+  'PICKUP_VERIFIED',
+  'IN_TRANSIT',
+  'DELIVERY_ARRIVED',
+  'DELIVERY_VERIFIED',
+];
+
+export const CANCELLABLE_SHIPMENT_STATUSES: ShipmentStatus[] = [
+  'REQUESTED',
+  'DRIVER_ASSIGNED',
+  'PICKUP_ARRIVED',
+];
