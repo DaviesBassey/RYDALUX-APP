@@ -1,8 +1,9 @@
-import { IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
+import { PackageCategory, ShipmentPriority } from '@prisma/client';
 
 export class CreateShipmentDto {
   @IsUUID()
-  fareQuoteId: string;
+  quoteId: string;
 
   @IsString()
   pickupAddress: string;
@@ -23,8 +24,11 @@ export class CreateShipmentDto {
   @IsString()
   packageDescription?: string;
 
-  @IsIn(['SMALL', 'MEDIUM', 'LARGE'])
-  packageSizeClass: string;
+  @IsEnum(PackageCategory)
+  packageCategory: PackageCategory;
+
+  @IsEnum(ShipmentPriority)
+  priority: ShipmentPriority;
 
   @IsOptional()
   @IsString()
