@@ -1,0 +1,4 @@
+-- Section 17: PayoutStatus enum values expansion
+ALTER TYPE "PayoutStatus" ADD VALUE 'REQUESTED' BEFORE 'PROCESSING';
+ALTER TYPE "PayoutStatus" ADD VALUE 'APPROVED' BEFORE 'PROCESSING';
+ALTER TYPE "PayoutStatus" ADD VALUE 'REJECTED' AFTER 'FAILED';
