@@ -1078,6 +1078,10 @@ export class ShipmentsService {
       throw new ForbiddenException('You are not assigned to this shipment.');
     }
 
+    if (shipment.status === 'CANCELLED' || shipment.status === 'DELIVERED' || shipment.status === 'DISPUTED' || shipment.status === 'EXPIRED') {
+      throw new BadRequestException(`Cannot perform driver actions on shipment in terminal status ${shipment.status}.`);
+    }
+
     return { shipment, driverProfile };
   }
 

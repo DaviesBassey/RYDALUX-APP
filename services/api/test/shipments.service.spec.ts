@@ -647,4 +647,163 @@ describe('ShipmentsService', () => {
       ).rejects.toThrow(BadRequestException);
     });
   });
+
+  describe('Hardened Coverage Suite', () => {
+    it('sender lists only own shipments', async () => {
+      mockPrisma.shipment.findMany.mockResolvedValue([
+        {
+          id: 'sh-1',
+          senderUserId: 'rider-1',
+          trip: { reference: 'RYD-ABC', fareQuote: { totalFare: 1000 } },
+        },
+      ]);
+      mockPrisma.shipment.count.mockResolvedValue(1);
+
+      const result = await service.listRiderShipments('rider-1', { limit: 10, offset: 0 });
+
+      expect(mockPrisma.shipment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ senderUserId: 'rider-1' }),
+        }),
+      );
+      expect(result.items.length).toBe(1);
+    });
+
+    it('cancelled shipment cannot progress', async () => {
+      mockPrisma.driverProfile.findUnique.mockResolvedValue({ id: 'dp-1' });
+      mockPrisma.shipment.findUnique.mockResolvedValue({
+        id: 'sh-1',
+        status: 'CANCELLED',
+        driverProfileId: 'dp-1',
+        trip: { driverProfileId: 'dp-1', status: 'CANCELLED_BY_RIDER' },
+      });
+
+      await expect(
+        service.arriveAtPickup('sh-1', 'driver-1'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('delivery arrival creates tracking event', async () => {
+      mockPrisma.driverProfile.findUnique.mockResolvedValue({ id: 'dp-1' });
+      mockPrisma.shipment.findUnique.mockResolvedValue({
+        id: 'sh-1',
+        status: 'IN_TRANSIT',
+        driverProfileId: 'dp-1',
+        trip: { driverProfileId: 'dp-1', status: 'IN_PROGRESS' },
+      });
+      mockPrisma.shipment.update.mockResolvedValue({});
+      mockPrisma.shipmentTrackingEvent.create.mockResolvedValue({});
+
+      const result = await service.arriveAtDelivery('sh-1', 'driver-1');
+
+      expect(mockPrisma.shipment.update).toHaveBeenCalledWith({
+        where: { id: 'sh-1' },
+        data: { status: 'DELIVERY_ARRIVED' },
+      });
+      expect(mockPrisma.shipmentTrackingEvent.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ eventType: 'STATUS_CHANGED', status: 'DELIVERY_ARRIVED' }),
+        }),
+      );
+      expect(result.status).toBe('DELIVERY_ARRIVED');
+    });
+
+    it('safe API responses never return otpHash or raw OTPs', async () => {
+      mockPrisma.shipment.findUnique.mockResolvedValue({
+        id: 'sh-1',
+        senderUserId: 'rider-1',
+        trip: { reference: 'RYD-ABC', fareQuote: { totalFare: 1500 } },
+        otps: [
+          {
+            id: 'otp-1',
+            otpType: 'PICKUP',
+            otpHash: '$2b$10$abcdefghijklmnopqrstuv',
+            attempts: 0,
+            maxAttempts: 3,
+            expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+            usedAt: null,
+          },
+        ],
+      });
+
+      const result = await service.getShipmentById('sh-1', 'rider-1', 'RIDER');
+
+      expect(result).toHaveProperty('otps');
+      expect(result.otps[0]).not.toHaveProperty('otpHash');
+      expect(result.otps[0]).not.toHaveProperty('otpCode');
+      expect(result.otps[0]).not.toHaveProperty('code');
+      expect(result.otps[0]).toEqual(
+        expect.objectContaining({
+          otpType: 'PICKUP',
+          isVerified: false,
+          attempts: 0,
+        }),
+      );
+    });
+
+    it('photo upload placeholder validates details and registers ShipmentPhoto', async () => {
+      mockPrisma.shipment.findUnique.mockResolvedValue({ id: 'sh-1', senderUserId: 'rider-1' });
+      mockPrisma.shipmentPhoto.create.mockResolvedValue({
+        id: 'photo-1',
+        photoType: 'PACKAGE',
+        fileUrl: 'https://rydalux-storage.local/files/shipment-sh-1/photo-1',
+        fileSize: 5000,
+        mimeType: 'image/png',
+        uploadedAt: new Date(),
+      });
+      mockPrisma.shipmentTrackingEvent.create.mockResolvedValue({});
+
+      const result = await service.requestPhotoUpload('sh-1', 'rider-1', {
+        photoType: 'PACKAGE',
+        fileSize: 5000,
+        mimeType: 'image/png',
+      });
+
+      expect(mockPrisma.shipmentPhoto.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          photoType: 'PACKAGE',
+          fileSize: 5000,
+          mimeType: 'image/png',
+        }),
+      });
+      expect(result.photo.id).toBeDefined();
+      expect(result.uploadUrl).toMatch(/https:\/\/rydalux-storage.local\/upload\/shipment-sh-1\/photo-/);
+    });
+
+    it('proof upload validates and structures proof details correctly', async () => {
+      mockPrisma.driverProfile.findUnique.mockResolvedValue({ id: 'dp-1' });
+      mockPrisma.shipment.findUnique.mockResolvedValue({
+        id: 'sh-1',
+        tripId: 'trip-1',
+        driverProfileId: 'dp-1',
+        status: 'DELIVERY_ARRIVED',
+        trip: { driverProfileId: 'dp-1', status: 'IN_PROGRESS' },
+      });
+      mockPrisma.shipmentProof.create.mockResolvedValue({
+        id: 'proof-1',
+        proofType: 'PHOTO_URL',
+        url: 'https://proof.url',
+        notes: 'Handed to recipient',
+        submittedBy: 'driver-1',
+        submittedAt: new Date(),
+      });
+      mockPrisma.tripEvent.create.mockResolvedValue({});
+      mockPrisma.shipmentTrackingEvent.create.mockResolvedValue({});
+
+      const result = await service.submitProof('sh-1', 'driver-1', {
+        url: 'https://proof.url',
+        notes: 'Handed to recipient',
+      });
+
+      expect(mockPrisma.shipmentProof.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          url: 'https://proof.url',
+          notes: 'Handed to recipient',
+          submittedBy: 'driver-1',
+        }),
+      });
+      expect(result.notes).toBe('Handed to recipient');
+      expect(result.submittedBy).toBe('driver-1');
+    });
+  });
 });
