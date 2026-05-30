@@ -20,6 +20,12 @@ jobs:
     environment: 
       name: staging
       # It is highly recommended to configure "Required Reviewers" for the staging environment in GitHub Settings.
+    env:
+      NODE_ENV: test
+      JWT_ACCESS_SECRET: placeholder-jwt-access-secret-32-chars-long
+      JWT_REFRESH_SECRET: placeholder-jwt-refresh-secret-32-chars-long
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      REDIS_URL: redis://localhost:6379
     
     steps:
       - name: Checkout Code
