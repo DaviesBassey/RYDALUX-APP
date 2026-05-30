@@ -16,16 +16,18 @@ Railway serves as our core runtime and database layer.
 2.  **Create a Staging Project**:
     *   Click **New Project** → Select **Empty Project**.
     *   Go to **Project Settings** → Rename the project to `rydalux-staging`.
-3.  **Provision PostgreSQL**:
-    *   Inside the project dashboard, click **Add Service** → **Database** → **Add PostgreSQL**.
-    *   Once provisioned, click on the **PostgreSQL** service → Go to the **Variables** tab. Copy the `DATABASE_URL` (e.g., `postgresql://...`) to your local staging config clipboard.
-4.  **Enable PostGIS Geographic Extension**:
-    *   Geospatial queries will crash if the `postgis` extension is missing.
-    *   Go to the **PostgreSQL** service panel → Go to the **Query** tab (or connect via PgAdmin/bastion shell).
-    *   Execute the following query to initialize the engine:
+3.  **Provision PostgreSQL (PostGIS Enabled)**:
+    *   **CRITICAL POLICY: Do not use vanilla Railway Postgres for RYDALUX staging.** Vanilla Postgres does not contain the pre-compiled PostGIS binaries required for geospatial types like `geography(Point,4326)`.
+    *   Instead, click **Add Service** → **Docker Image** and use a PostGIS container image (such as `postgis/postgis:15-3.4` or search Railway's templates for a PostGIS-enabled Postgres setup).
+    *   Once provisioned, click on the PostGIS database service → Go to the **Variables** tab. Copy the internal `DATABASE_URL` (e.g., `postgresql://...`) to your staging secrets clipboard.
+4.  **Enable & Validate PostGIS Geographic Extension**:
+    *   Geospatial tables will fail migrations if the extension is not explicitly enabled.
+    *   Go to your PostGIS database service query panel (or connect via PgAdmin/bastion shell).
+    *   Execute the following SQL command to initialize the spatial engine:
         ```sql
         CREATE EXTENSION IF NOT EXISTS postgis;
         ```
+    *   Verify the installation by running `SELECT PostGIS_Version();` to confirm the version is outputted cleanly.
 5.  **Provision Redis**:
     *   Click **Add Service** → **Database** → **Add Redis**.
     *   Wait for initialization, select the Redis service, go to **Variables**, and copy the `REDIS_URL` (e.g., `redis://...`).
@@ -170,3 +172,42 @@ Verify system integrity using the following functional checklists immediately af
 >    pg_dump -h <railway-db-host> -U postgres -d railway > pre-migration-stage.sql
 >    ```
 > 3. If a migration fails or corrupts data, roll back the API server image immediately to the previous compatible version to prevent writes, restore tables from `pre-migration-stage.sql`, and deploy a backwards-compatible schema fix.
+
+---
+
+## 6. PostGIS & Migration Troubleshooting Guide
+
+During database migrations or system startup on staging, you may encounter PostGIS-related errors due to vanilla database setups. Use this guide to resolve them safely.
+
+### 6.1 Common Geospatial Errors & Root Causes
+
+#### Error 1: `ERROR: type "geography" does not exist`
+*   **Root Cause**: The Prisma migration scripts attempt to create columns using the `Unsupported("geography(Point, 4326)")` type, but the PostGIS extension has not been enabled in the target database.
+*   **Solution**: Connect to your database query console and execute:
+    ```sql
+    CREATE EXTENSION IF NOT EXISTS postgis;
+    ```
+
+#### Error 2: `ERROR: extension "postgis" is not available`
+*   **Root Cause**: You are using a vanilla Railway PostgreSQL instance or standard image that does not have the PostGIS shared binary libraries compiled.
+*   **Solution**: Terminate the service, and deploy using a PostGIS-enabled database container image (such as `postgis/postgis:15-3.4`).
+
+---
+
+### 6.2 Safe Staging Migration Verification Playbook
+
+Always run these verification commands sequentially to prevent schema corruption or data loss:
+
+```bash
+# 1. Run local schema generation
+corepack pnpm --filter @rydulux/prisma generate
+
+# 2. Safely verify staging DB migration status before deploying
+DATABASE_URL="<staging-db-url>" corepack pnpm --filter @rydulux/prisma exec prisma migrate status
+
+# 3. If migrate status reports pending files, deploy them safely (NEVER use 'db push' or 'migrate reset')
+DATABASE_URL="<staging-db-url>" corepack pnpm --filter @rydulux/prisma exec prisma migrate deploy
+
+# 4. Check status again to verify the database is up-to-date and clean
+DATABASE_URL="<staging-db-url>" corepack pnpm --filter @rydulux/prisma exec prisma migrate status
+```

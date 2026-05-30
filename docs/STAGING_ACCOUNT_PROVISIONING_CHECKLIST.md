@@ -11,12 +11,13 @@ Railway hosts the API container, PostgreSQL database, and Redis cache.
 - [ ] **1.1 Workspace Setup**:
   - Sign in or create a developer workspace on [Railway.app](https://railway.app).
   - Create a new project and rename it to `rydalux-staging`.
-- [ ] **1.2 PostgreSQL Provisioning**:
-  - Click **Add Service** → **Database** → **Add PostgreSQL**.
+- [ ] **1.2 PostgreSQL Provisioning (PostGIS Enabled)**:
+  - **Do NOT use vanilla Railway Postgres** (as it lacks pre-installed PostGIS binaries required for geospatial types).
+  - Click **Add Service** → **Docker Image** and use a PostGIS container image (such as `postgis/postgis:15-3.4` or search Railway's templates for a PostGIS-enabled Postgres setup).
   - Document the internally routed database connection URL (`DATABASE_URL`).
 - [ ] **1.3 PostgreSQL Geospatial PostGIS Setup**:
-  - Go to the PostgreSQL service panel.
-  - Navigate to the **Query** tab and run the following command to enable PostGIS:
+  - Open the query panel of your PostGIS database service.
+  - Run the following check to ensure PostGIS is fully enabled/compiled before executing Prisma migrations:
     ```sql
     CREATE EXTENSION IF NOT EXISTS postgis;
     ```

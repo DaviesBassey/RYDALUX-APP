@@ -96,8 +96,8 @@ graph LR
 ### 1. API Hosting: Railway (Developer Plan)
 The NestJS backend will run inside a custom Docker container on Railway. It utilizes Railway’s instant private networking to communicate with Postgres and Redis locally without exposing raw service ports to the public internet.
 
-### 2. Database Hosting: Railway PostgreSQL
-Railway provisions a dedicated PostgreSQL instance. We will run a post-provisioning migration script to initialize the `postgis` extension.
+### 2. Database Hosting: Railway PostgreSQL + PostGIS Docker Service
+Rather than using vanilla Railway Postgres (which lacks pre-compiled PostGIS extension library modules), we will deploy a dedicated PostGIS-capable Postgres Docker service (such as the standard `postgis/postgis:15-3.4` container image) to satisfy all geography-based data queries.
 
 ### 3. Queue & Cache: Railway Redis
 A private Redis instance provisioned on the same Railway project to handle BullMQ jobs and express session tokens.
@@ -131,8 +131,8 @@ This hybrid stack leverages developer tiers to keep staging running at a negligi
 ## 6. Staging Implementation Setup Checklist
 
 - [ ] **Step 1**: Register a Railway developer account.
-- [ ] **Step 2**: Create a new project and add **PostgreSQL** and **Redis** services.
-- [ ] **Step 3**: Access the PostgreSQL console and run `CREATE EXTENSION postgis;` to enable geographic query engines.
+- [ ] **Step 2**: Create a new project and add **PostgreSQL (via PostGIS Docker Image)** and **Redis** services.
+- [ ] **Step 3**: Access the PostGIS database query panel and run `CREATE EXTENSION IF NOT EXISTS postgis;` to initialize geospatial capabilities before applying migrations.
 - [ ] **Step 4**: Deploy the `services/api` repository via Railway’s Git connector.
 - [ ] **Step 5**: Populate the 20 environment secrets in the Railway API variables panel (using `STAGING_*` configurations).
 - [ ] **Step 6**: Verify that the API builds, runs migrations, seeds, and reports `200 OK` on `GET /health/ready`.
