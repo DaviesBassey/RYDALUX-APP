@@ -1,8 +1,5 @@
 -- Section 18: Safety Module
 
--- Update SosStatus enum to add new status values
-ALTER TYPE "SosStatus" ADD VALUE 'ESCALATED' AFTER 'ACKNOWLEDGED';
-ALTER TYPE "SosStatus" ADD VALUE 'FALSE_ALARM' AFTER 'RESOLVED';
 
 -- Create SafetyFlagType enum
 CREATE TYPE "SafetyFlagType" AS ENUM ('REPEAT_INCIDENT', 'PATTERN_DETECTED', 'HIGH_RISK_BEHAVIOR', 'SUSPICIOUS_ACTIVITY');
