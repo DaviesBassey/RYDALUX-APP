@@ -157,8 +157,18 @@ export class AdminController {
 
   @Get('payments')
   @Permissions('FINANCE_MANAGER')
-  listPayments(@Query('limit') limit?: string, @Query('offset') offset?: string) {
-    return this.paymentsService.listPayments(Number(limit) || 20, Number(offset) || 0);
+  listPayments(
+    @Query('status') status?: string,
+    @Query('provider') provider?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.paymentsService.listPayments(
+      Number(limit) || 20,
+      Number(offset) || 0,
+      status,
+      provider,
+    );
   }
 
   @Get('payouts/pending')
@@ -434,5 +444,143 @@ export class AdminController {
   resolveShipment(@Param('id') id: string, @Body() body: AdminResolveShipmentDto, @Req() req: Request) {
     const user = req.user as any;
     return this.shipmentsService.adminResolveShipment(id, user.userId, body.resolution, body.notes);
+  }
+
+  // ── Missing Admin Dashboard Compatibility Routes ─────────────────────────────
+
+  @Get('users')
+  async listUsers(@Query('type') type?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    const where: any = { deletedAt: null };
+    if (type) {
+      where.userType = type as any;
+    }
+    const [items, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: Number(offset) || 0,
+        take: Number(limit) || 20,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+    return { items, total, limit: Number(limit) || 20, offset: Number(offset) || 0 };
+  }
+
+  @Get('riders')
+  async listRiders(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    const [items, total] = await Promise.all([
+      this.prisma.riderProfile.findMany({
+        where: { deletedAt: null },
+        include: {
+          user: { select: { id: true, email: true, firstName: true, lastName: true, phone: true, displayName: true } }
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: Number(offset) || 0,
+        take: Number(limit) || 20,
+      }),
+      this.prisma.riderProfile.count({ where: { deletedAt: null } }),
+    ]);
+    return { items, total, limit: Number(limit) || 20, offset: Number(offset) || 0 };
+  }
+
+  @Get('trips')
+  async listTrips(@Query('status') status?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    const where: any = {};
+    if (status) {
+      where.status = status as any;
+    }
+    const [items, total] = await Promise.all([
+      this.prisma.trip.findMany({
+        where,
+        include: {
+          riderProfile: {
+            include: { user: { select: { id: true, email: true, firstName: true, lastName: true, displayName: true } } }
+          },
+          driverProfile: {
+            include: { user: { select: { id: true, email: true, firstName: true, lastName: true, displayName: true } } }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: Number(offset) || 0,
+        take: Number(limit) || 20,
+      }),
+      this.prisma.trip.count({ where }),
+    ]);
+    return { items, total, limit: Number(limit) || 20, offset: Number(offset) || 0 };
+  }
+
+  @Get('payouts')
+  @Permissions('FINANCE_MANAGER')
+  async listPayouts(@Query('status') status?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+    const where: any = {};
+    if (status) {
+      where.status = status as any;
+    }
+    const [items, total] = await Promise.all([
+      this.prisma.payout.findMany({
+        where,
+        include: {
+          driverProfile: {
+            include: {
+              user: { select: { id: true, displayName: true, phone: true, email: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: Number(offset) || 0,
+        take: Number(limit) || 20,
+      }),
+      this.prisma.payout.count({ where }),
+    ]);
+
+    return {
+      items: items.map((p) => ({
+        id: p.id,
+        amount: Number(p.amount), // Safe conversion
+        currency: p.currency,
+        status: p.status,
+        provider: p.provider,
+        createdAt: p.createdAt,
+        driver: {
+          id: p.driverProfile.user.id,
+          name: p.driverProfile.user.displayName,
+          phone: p.driverProfile.user.phone,
+          email: p.driverProfile.user.email,
+        },
+      })),
+      total,
+      limit: Number(limit) || 20,
+      offset: Number(offset) || 0,
+    };
+  }
+
+  @Get('ledger/accounts')
+  @Permissions('FINANCE_MANAGER')
+  async listLedgerAccounts() {
+    const items = await this.prisma.ledgerAccount.findMany({
+      orderBy: { code: 'asc' },
+    });
+    return { items, total: items.length };
+  }
+
+  @Get('ledger/transactions')
+  @Permissions('FINANCE_MANAGER')
+  async listLedgerTransactions(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    const [items, total] = await Promise.all([
+      this.prisma.financialTransaction.findMany({
+        include: {
+          ledgerEntries: {
+            include: {
+              ledgerAccount: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: Number(offset) || 0,
+        take: Number(limit) || 20,
+      }),
+      this.prisma.financialTransaction.count(),
+    ]);
+    return { items, total, limit: Number(limit) || 20, offset: Number(offset) || 0 };
   }
 }

@@ -42,6 +42,11 @@ export class PermissionsGuard implements CanActivate {
     }
 
     const grantedPermissions = adminUser.role.permissions.map((rp: { permission: { name: string } }) => rp.permission.name);
+    
+    if (grantedPermissions.includes('SUPER_ADMIN')) {
+      return true;
+    }
+
     const hasPermission = requiredPermissions.every(permission => grantedPermissions.includes(permission));
 
     if (!hasPermission) {

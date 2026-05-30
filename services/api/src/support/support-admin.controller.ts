@@ -18,7 +18,7 @@ import { AssignTicketDto } from './dto/assign-ticket.dto';
 
 @Controller('admin/support')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
-@Permissions('SUPPORT_OFFICER')
+@Permissions('SUPPORT_AGENT')
 export class SupportAdminController {
   constructor(private supportService: SupportService) {}
 
