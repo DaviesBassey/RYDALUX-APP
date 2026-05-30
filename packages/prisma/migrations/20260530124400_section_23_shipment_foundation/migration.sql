@@ -1,7 +1,9 @@
 -- CreateEnum for ShipmentStatus (update existing)
 ALTER TYPE "ShipmentStatus" RENAME TO "ShipmentStatus_old";
 CREATE TYPE "ShipmentStatus" AS ENUM ('DRAFT', 'QUOTED', 'REQUESTED', 'DRIVER_ASSIGNED', 'PICKUP_ARRIVED', 'PICKUP_VERIFIED', 'IN_TRANSIT', 'DELIVERY_ARRIVED', 'DELIVERY_VERIFIED', 'DELIVERED', 'CANCELLED', 'DISPUTED', 'EXPIRED');
+ALTER TABLE "Shipment" ALTER COLUMN "status" DROP DEFAULT;
 ALTER TABLE "Shipment" ALTER COLUMN "status" TYPE "ShipmentStatus" USING "status"::text::"ShipmentStatus";
+ALTER TABLE "Shipment" ALTER COLUMN "status" SET DEFAULT 'DRAFT'::"ShipmentStatus";
 DROP TYPE "ShipmentStatus_old";
 
 -- CreateEnum for PackageCategory
