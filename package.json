@@ -21,7 +21,10 @@
     "db:setup": "pnpm db:start && sleep 3 && pnpm db:migrate && pnpm db:seed",
     "start:api": "pnpm --filter @rydulux/api-services-local start",
     "start:admin": "pnpm --filter @rydulux/admin dev",
-    "start:mobile": "pnpm --filter @rydulux/mobile start"
+    "start:mobile": "pnpm --filter @rydulux/mobile start",
+    "build:staging": "turbo run build",
+    "db:migrate:staging": "pnpm --filter @rydulux/prisma migrate:deploy",
+    "healthcheck:staging": "curl -f http://localhost:4000/health/ready"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
