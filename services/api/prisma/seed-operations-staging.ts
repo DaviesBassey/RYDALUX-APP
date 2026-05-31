@@ -791,7 +791,7 @@ async function main() {
   const ledgerRevenueAcct = spawnedLedgerAccounts['4000'];
 
   if (ledgerCashAcct && ledgerPayableAcct && ledgerRevenueAcct) {
-    const ft = await prisma.financialTransaction.upsert({
+    await prisma.financialTransaction.upsert({
       where: { id: FT_1_ID },
       update: {},
       create: {
