@@ -463,7 +463,22 @@ export class AdminController {
       }),
       this.prisma.user.count({ where }),
     ]);
-    return { items, total, limit: Number(limit) || 20, offset: Number(offset) || 0 };
+    return {
+      items: items.map((u) => ({
+        id: u.id,
+        email: u.email || '',
+        firstName: u.firstName || '',
+        lastName: u.lastName || '',
+        phone: u.phone || '',
+        role: u.userType || 'UNKNOWN',
+        status: u.deletedAt ? 'INACTIVE' : 'ACTIVE',
+        createdAt: u.createdAt ? u.createdAt.toISOString() : null,
+        lastLogin: u.lastLoginAt ? u.lastLoginAt.toISOString() : null,
+      })),
+      total,
+      limit: Number(limit) || 20,
+      offset: Number(offset) || 0,
+    };
   }
 
   @Get('riders')
@@ -560,7 +575,17 @@ export class AdminController {
     const items = await this.prisma.ledgerAccount.findMany({
       orderBy: { code: 'asc' },
     });
-    return { items, total: items.length };
+    return {
+      items: items.map((a) => ({
+        id: a.id,
+        code: a.code || '',
+        name: a.name || '',
+        accountType: a.accountType || 'UNKNOWN',
+        balance: a.balance ? Number(a.balance) : 0,
+        currency: a.currency || 'NGN',
+      })),
+      total: items.length,
+    };
   }
 
   @Get('ledger/transactions')
@@ -581,6 +606,22 @@ export class AdminController {
       }),
       this.prisma.financialTransaction.count(),
     ]);
-    return { items, total, limit: Number(limit) || 20, offset: Number(offset) || 0 };
+    return {
+      items: items.map((ft) => {
+        const firstEntry = ft.ledgerEntries?.[0];
+        return {
+          id: ft.id,
+          reference: ft.reference || '',
+          accountCode: firstEntry?.ledgerAccount?.code || '—',
+          amount: ft.amount ? Number(ft.amount) : 0,
+          type: firstEntry?.transactionType || 'UNKNOWN',
+          createdAt: ft.createdAt ? ft.createdAt.toISOString() : null,
+          description: firstEntry?.description || ft.eventType || '',
+        };
+      }),
+      total,
+      limit: Number(limit) || 20,
+      offset: Number(offset) || 0,
+    };
   }
 }
