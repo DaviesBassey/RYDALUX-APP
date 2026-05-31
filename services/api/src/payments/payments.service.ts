@@ -400,19 +400,19 @@ export class PaymentsService {
             ? {
                 id: p.trip.id,
                 reference: p.trip.reference,
-                status: p.trip.status ? p.trip.status.toString() : 'UNKNOWN',
+                status: p.trip.status ? String(p.trip.status) : 'UNKNOWN',
               }
             : null;
 
           return {
             id: p.id,
             tripId: p.tripId ?? null,
-            amount: p.amount ? Number(p.amount) : 0,
-            currency: p.currency ?? 'NGN',
-            status: p.status ? p.status.toString() : 'PENDING',
-            reference: p.reference ?? '',
-            provider: p.provider ?? 'unknown',
-            createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : new Date(p.createdAt).toISOString(),
+            amount: Number(p.amount),
+            currency: p.currency ? String(p.currency) : 'NGN',
+            status: p.status ? String(p.status) : 'PENDING',
+            reference: p.reference ? String(p.reference) : '',
+            provider: p.provider ? String(p.provider) : 'unknown',
+            createdAt: p.createdAt?.toISOString(),
             user: mappedUser,
             trip: mappedTrip,
           };
