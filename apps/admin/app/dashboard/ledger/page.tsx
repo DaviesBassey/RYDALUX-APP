@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, normalizeListResponse } from '@/lib/api';
 import { DataTable, DataTableColumn } from '@/lib/components/DataTable';
 import { PageHeader } from '@/lib/components/PageHeader';
 import { formatCurrency, formatDateTime } from '@/lib/utils/formats';
@@ -85,10 +85,11 @@ export default function LedgerPage() {
         api.getLedgerAccounts(),
         api.getLedgerTransactions(pageSize, currentPage * pageSize),
       ]);
-      const accountList = Array.isArray(accRes) ? accRes : (accRes?.items || []);
-      setAccounts(accountList);
-      setTransactions(transRes?.items || []);
-      setTotalCount(transRes?.total || 0);
+      const normalizedAcc = normalizeListResponse<LedgerAccount>(accRes);
+      const normalizedTrans = normalizeListResponse<LedgerTransaction>(transRes);
+      setAccounts(normalizedAcc.items);
+      setTransactions(normalizedTrans.items);
+      setTotalCount(normalizedTrans.total);
     } catch (err: any) {
       setError(err.message || 'Failed to load ledger data');
     } finally {

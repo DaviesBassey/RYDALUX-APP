@@ -29,8 +29,9 @@ export class SupportAdminController {
     @Query('type') type?: string,
     @Query('priority') priority?: string,
     @Query('assignedToId') assignedToId?: string,
-    @Query('page') page: number = 0,
-    @Query('limit') limit: number = 20,
+    @Query('page') page?: string,
+    @Query('offset') offset?: string,
+    @Query('limit') limit?: string,
   ) {
     const filter: any = {};
     if (status) filter.status = status;
@@ -38,7 +39,13 @@ export class SupportAdminController {
     if (priority) filter.priority = priority;
     if (assignedToId) filter.assignedToId = assignedToId;
 
-    return this.supportService.listTickets(req.user.id, filter, page, limit);
+    const parsedLimit = Number(limit) || 20;
+    let parsedOffset = Number(offset) || 0;
+    if (page !== undefined && offset === undefined) {
+      parsedOffset = (Number(page) || 0) * parsedLimit;
+    }
+
+    return this.supportService.listTickets(req.user.id, filter, parsedOffset, parsedLimit);
   }
 
   @Get('tickets/:ticketId')

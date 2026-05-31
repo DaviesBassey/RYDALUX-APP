@@ -23,7 +23,7 @@ interface DataTableProps<T> {
   currentPage?: number;
 }
 
-export function DataTable<T extends { id: string }>({
+export function DataTable<T>({
   columns,
   data,
   isLoading,
@@ -31,12 +31,14 @@ export function DataTable<T extends { id: string }>({
   error,
   onRowClick,
   pageSize = 20,
-  totalCount = data.length,
+  totalCount = Array.isArray(data) ? data.length : 0,
   onPageChange,
   currentPage = 0,
 }: DataTableProps<T>) {
   const [sortBy, setSortBy] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const safeData = Array.isArray(data) ? data : [];
 
   const handleSort = (key: string) => {
     if (sortBy === key) {
@@ -59,7 +61,7 @@ export function DataTable<T extends { id: string }>({
 
       {isLoading ? (
         <div className="p-8 text-center text-gray-500">Loading...</div>
-      ) : isEmpty || data.length === 0 ? (
+      ) : isEmpty || safeData.length === 0 ? (
         <div className="p-8 text-center text-gray-500">No data available</div>
       ) : (
         <>
@@ -84,21 +86,24 @@ export function DataTable<T extends { id: string }>({
                 </tr>
               </thead>
               <tbody>
-                {data.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => onRowClick?.(row)}
-                  >
-                    {columns.map((col) => (
-                      <td key={String(col.key)} className="table-cell text-gray-700">
-                        {col.render
-                          ? col.render((row as any)[String(col.key)], row)
-                          : String((row as any)[String(col.key)] || '')}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
+                {safeData.map((row, idx) => {
+                  const rowId = (row as any)?.id || `row-idx-${idx}`;
+                  return (
+                    <tr
+                      key={rowId}
+                      className="hover:bg-gray-50 cursor-pointer"
+                      onClick={() => onRowClick?.(row)}
+                    >
+                      {columns.map((col) => (
+                        <td key={String(col.key)} className="table-cell text-gray-700">
+                          {col.render
+                            ? col.render((row as any)[String(col.key)], row)
+                            : String((row as any)[String(col.key)] ?? '')}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
