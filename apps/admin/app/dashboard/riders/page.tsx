@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, normalizeListResponse } from '@/lib/api';
 import { DataTable, DataTableColumn } from '@/lib/components/DataTable';
 import { StatusBadge } from '@/lib/components/StatusBadge';
 import { PageHeader } from '@/lib/components/PageHeader';
@@ -76,8 +76,23 @@ export default function RidersPage() {
     setError('');
     try {
       const res = await api.getRiders(pageSize, currentPage * pageSize);
-      setRiders(res.items || []);
-      setTotalCount(res.total || 0);
+      const normalized = normalizeListResponse<any>(res);
+      const safeItems = normalized.items.map((r: any, idx: number) => ({
+        id: r?.id || r?.userId || `rider-row-${idx}`,
+        user: {
+          id: r?.user?.id || r?.userId || '',
+          email: r?.user?.email || '',
+          firstName: r?.user?.firstName || '',
+          lastName: r?.user?.lastName || '',
+        },
+        rating: Number(r?.rating ?? r?.averageRating ?? 0) || 0,
+        totalTrips: Number(r?.totalTrips ?? r?._count?.trips ?? 0) || 0,
+        kycStatus: String(r?.kycStatus || r?.user?.kycStatus || 'PENDING'),
+        status: String(r?.status || (r?.isActive === false ? 'INACTIVE' : 'ACTIVE')),
+        createdAt: r?.createdAt || new Date().toISOString(),
+      }));
+      setRiders(safeItems);
+      setTotalCount(normalized.total || safeItems.length);
     } catch (err: any) {
       setError(err.message || 'Failed to load riders');
     } finally {

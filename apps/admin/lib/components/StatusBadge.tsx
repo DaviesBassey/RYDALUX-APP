@@ -57,8 +57,9 @@ const statusColorMap: Record<string, { bg: string; text: string }> = {
 };
 
 export function StatusBadge({ status, variant = 'default' }: StatusBadgeProps) {
-  const colors = statusColorMap[status] || { bg: 'bg-gray-100', text: 'text-gray-800' };
-  const displayStatus = status
+  const safeStatus = String(status || 'UNKNOWN');
+  const colors = statusColorMap[safeStatus] || { bg: 'bg-gray-100', text: 'text-gray-800' };
+  const displayStatus = safeStatus
     .split('_')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(' ');
