@@ -105,10 +105,12 @@ export default function PayoutsPage() {
       <div className="mb-6 flex gap-4 flex-wrap">
         <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-field w-48">
           <option value="">All Statuses</option>
-          <option value="PENDING">Pending</option>
+          <option value="REQUESTED">Requested</option>
+          <option value="APPROVED">Approved</option>
           <option value="PROCESSING">Processing</option>
-          <option value="COMPLETED">Completed</option>
+          <option value="PAID">Paid</option>
           <option value="FAILED">Failed</option>
+          <option value="REJECTED">Rejected</option>
           <option value="CANCELLED">Cancelled</option>
         </select>
       </div>
