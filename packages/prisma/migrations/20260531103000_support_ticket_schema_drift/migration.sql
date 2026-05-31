@@ -1,37 +1,87 @@
--- CreateEnum
-CREATE TYPE "SupportTicketType" AS ENUM ('PAYMENT_ISSUE', 'DRIVER_COMPLAINT', 'RIDER_COMPLAINT', 'LOST_ITEM', 'SAFETY_ISSUE', 'CANCELLATION_ISSUE', 'REFUND_REQUEST', 'PAYOUT_ISSUE', 'ACCOUNT_ISSUE', 'VEHICLE_ISSUE', 'SHIPMENT_ISSUE', 'OTHER');
+-- 1. Create missing enums if they do not exist
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'SupportTicketType') THEN
+        CREATE TYPE "SupportTicketType" AS ENUM ('PAYMENT_ISSUE', 'DRIVER_COMPLAINT', 'RIDER_COMPLAINT', 'LOST_ITEM', 'SAFETY_ISSUE', 'CANCELLATION_ISSUE', 'REFUND_REQUEST', 'PAYOUT_ISSUE', 'ACCOUNT_ISSUE', 'VEHICLE_ISSUE', 'SHIPMENT_ISSUE', 'OTHER');
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'SupportTicketPriority') THEN
+        CREATE TYPE "SupportTicketPriority" AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'URGENT');
+    END IF;
+END $$;
 
--- CreateEnum
-CREATE TYPE "SupportTicketPriority" AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'URGENT');
-
--- AlterEnum
+-- 2. Alter enum SupportStatus to add missing values if not exists
 ALTER TYPE "SupportStatus" ADD VALUE IF NOT EXISTS 'IN_REVIEW';
 ALTER TYPE "SupportStatus" ADD VALUE IF NOT EXISTS 'WAITING_ON_USER';
 ALTER TYPE "SupportStatus" ADD VALUE IF NOT EXISTS 'WAITING_ON_ADMIN';
 ALTER TYPE "SupportStatus" ADD VALUE IF NOT EXISTS 'ESCALATED';
 
--- Rename userId to createdById safely
-ALTER TABLE "SupportTicket" RENAME COLUMN "userId" TO "createdById";
+-- 3. Rename userId to createdById safely if userId exists and createdById does not
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name='SupportTicket' AND column_name='userId'
+    ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name='SupportTicket' AND column_name='createdById'
+    ) THEN
+        ALTER TABLE "SupportTicket" RENAME COLUMN "userId" TO "createdById";
+    END IF;
+END $$;
 
--- Drop old foreign key constraint and add the new one pointing to User(id)
-ALTER TABLE "SupportTicket" DROP CONSTRAINT IF EXISTS "SupportTicket_userId_fkey";
-ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+-- 4. Add createdById safely if neither exists
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name='SupportTicket' AND column_name='createdById'
+    ) THEN
+        ALTER TABLE "SupportTicket" ADD COLUMN "createdById" UUID;
+        -- Backfill existing rows to first user if any exists
+        UPDATE "SupportTicket" SET "createdById" = (SELECT id FROM "User" LIMIT 1) WHERE "createdById" IS NULL;
+        ALTER TABLE "SupportTicket" ALTER COLUMN "createdById" SET NOT NULL;
+    END IF;
+END $$;
 
--- Drop old index and add the new one
-DROP INDEX IF EXISTS "SupportTicket_userId_status_idx";
-CREATE INDEX IF NOT EXISTS "SupportTicket_createdById_status_idx" ON "SupportTicket"("createdById", "status");
+-- 5. Rename subject to title safely if subject exists and title does not
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name='SupportTicket' AND column_name='subject'
+    ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name='SupportTicket' AND column_name='title'
+    ) THEN
+        ALTER TABLE "SupportTicket" RENAME COLUMN "subject" TO "title";
+    END IF;
+END $$;
 
--- Rename subject to title
-ALTER TABLE "SupportTicket" RENAME COLUMN "subject" TO "title";
+-- 6. Alter priority from TEXT to SupportTicketPriority ENUM safely if it is currently text
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name='SupportTicket' AND column_name='priority' AND data_type='text'
+    ) THEN
+        ALTER TABLE "SupportTicket" ALTER COLUMN "priority" TYPE "SupportTicketPriority" USING (COALESCE("priority", 'MEDIUM')::"SupportTicketPriority");
+    END IF;
+    ALTER TABLE "SupportTicket" ALTER COLUMN "priority" SET DEFAULT 'MEDIUM';
+END $$;
 
--- Alter priority from TEXT to SupportTicketPriority ENUM safely
-ALTER TABLE "SupportTicket" ALTER COLUMN "priority" TYPE "SupportTicketPriority" USING (COALESCE("priority", 'MEDIUM')::"SupportTicketPriority");
-ALTER TABLE "SupportTicket" ALTER COLUMN "priority" SET DEFAULT 'MEDIUM';
+-- 7. Add type column safely
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name='SupportTicket' AND column_name='type'
+    ) THEN
+        ALTER TABLE "SupportTicket" ADD COLUMN "type" "SupportTicketType" NOT NULL DEFAULT 'OTHER';
+    END IF;
+END $$;
 
--- Add type column
-ALTER TABLE "SupportTicket" ADD COLUMN "type" "SupportTicketType" NOT NULL DEFAULT 'OTHER';
-
--- Add missing relation columns safely
+-- 8. Add all missing relation columns expected by schema.prisma
 ALTER TABLE "SupportTicket" ADD COLUMN IF NOT EXISTS "tripId" UUID;
 ALTER TABLE "SupportTicket" ADD COLUMN IF NOT EXISTS "paymentId" UUID;
 ALTER TABLE "SupportTicket" ADD COLUMN IF NOT EXISTS "payoutId" UUID;
@@ -39,8 +89,16 @@ ALTER TABLE "SupportTicket" ADD COLUMN IF NOT EXISTS "sosEventId" UUID;
 ALTER TABLE "SupportTicket" ADD COLUMN IF NOT EXISTS "incidentReportId" UUID;
 ALTER TABLE "SupportTicket" ADD COLUMN IF NOT EXISTS "vehicleId" UUID;
 ALTER TABLE "SupportTicket" ADD COLUMN IF NOT EXISTS "shipmentId" UUID;
+ALTER TABLE "SupportTicket" ADD COLUMN IF NOT EXISTS "assignedToId" UUID;
 
--- Drop constraints if already exist and add foreign keys
+-- 9. Add foreign keys safely
+ALTER TABLE "SupportTicket" DROP CONSTRAINT IF EXISTS "SupportTicket_userId_fkey";
+ALTER TABLE "SupportTicket" DROP CONSTRAINT IF EXISTS "SupportTicket_createdById_fkey";
+ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+ALTER TABLE "SupportTicket" DROP CONSTRAINT IF EXISTS "SupportTicket_assignedToId_fkey";
+ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_assignedToId_fkey" FOREIGN KEY ("assignedToId") REFERENCES "AdminUser"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
 ALTER TABLE "SupportTicket" DROP CONSTRAINT IF EXISTS "SupportTicket_tripId_fkey";
 ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_tripId_fkey" FOREIGN KEY ("tripId") REFERENCES "Trip"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
@@ -62,7 +120,9 @@ ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_vehicleId_fkey" FOREIG
 ALTER TABLE "SupportTicket" DROP CONSTRAINT IF EXISTS "SupportTicket_shipmentId_fkey";
 ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_shipmentId_fkey" FOREIGN KEY ("shipmentId") REFERENCES "Shipment"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- Create Indexes safely
+-- 10. Create indexes safely
+DROP INDEX IF EXISTS "SupportTicket_userId_status_idx";
+CREATE INDEX IF NOT EXISTS "SupportTicket_createdById_status_idx" ON "SupportTicket"("createdById", "status");
 CREATE INDEX IF NOT EXISTS "SupportTicket_assignedToId_status_idx" ON "SupportTicket"("assignedToId", "status");
 CREATE INDEX IF NOT EXISTS "SupportTicket_type_status_idx" ON "SupportTicket"("type", "status");
 CREATE INDEX IF NOT EXISTS "SupportTicket_priority_status_idx" ON "SupportTicket"("priority", "status");
@@ -71,7 +131,7 @@ CREATE INDEX IF NOT EXISTS "SupportTicket_paymentId_idx" ON "SupportTicket"("pay
 CREATE INDEX IF NOT EXISTS "SupportTicket_payoutId_idx" ON "SupportTicket"("payoutId");
 CREATE INDEX IF NOT EXISTS "SupportTicket_shipmentId_idx" ON "SupportTicket"("shipmentId");
 
--- Create SupportTicketMessage table if not exists
+-- 11. Create SupportTicketMessage table if missing
 CREATE TABLE IF NOT EXISTS "SupportTicketMessage" (
     "id" UUID NOT NULL,
     "ticketId" UUID NOT NULL,
@@ -84,7 +144,7 @@ CREATE TABLE IF NOT EXISTS "SupportTicketMessage" (
     CONSTRAINT "SupportTicketMessage_pkey" PRIMARY KEY ("id")
 );
 
--- Create SupportTicketAttachment table if not exists
+-- 12. Create SupportTicketAttachment table if missing
 CREATE TABLE IF NOT EXISTS "SupportTicketAttachment" (
     "id" UUID NOT NULL,
     "ticketId" UUID NOT NULL,
@@ -98,22 +158,20 @@ CREATE TABLE IF NOT EXISTS "SupportTicketAttachment" (
     CONSTRAINT "SupportTicketAttachment_pkey" PRIMARY KEY ("id")
 );
 
--- Add SupportTicketMessage foreign keys
+-- 13. Add relation keys for message and attachment tables safely
 ALTER TABLE "SupportTicketMessage" DROP CONSTRAINT IF EXISTS "SupportTicketMessage_ticketId_fkey";
 ALTER TABLE "SupportTicketMessage" ADD CONSTRAINT "SupportTicketMessage_ticketId_fkey" FOREIGN KEY ("ticketId") REFERENCES "SupportTicket"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE "SupportTicketMessage" DROP CONSTRAINT IF EXISTS "SupportTicketMessage_authorId_fkey";
 ALTER TABLE "SupportTicketMessage" ADD CONSTRAINT "SupportTicketMessage_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- Add SupportTicketAttachment foreign keys
 ALTER TABLE "SupportTicketAttachment" DROP CONSTRAINT IF EXISTS "SupportTicketAttachment_ticketId_fkey";
 ALTER TABLE "SupportTicketAttachment" ADD CONSTRAINT "SupportTicketAttachment_ticketId_fkey" FOREIGN KEY ("ticketId") REFERENCES "SupportTicket"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- Add SupportTicketAttachment uploader key
 ALTER TABLE "SupportTicketAttachment" DROP CONSTRAINT IF EXISTS "SupportTicketAttachment_uploadedById_fkey";
 ALTER TABLE "SupportTicketAttachment" ADD CONSTRAINT "SupportTicketAttachment_uploadedById_fkey" FOREIGN KEY ("uploadedById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- Create Indexes for message and attachment tables safely
+-- 14. Create indexes for message and attachment tables safely
 CREATE INDEX IF NOT EXISTS "SupportTicketMessage_ticketId_isInternal_idx" ON "SupportTicketMessage"("ticketId", "isInternal");
 CREATE INDEX IF NOT EXISTS "SupportTicketMessage_authorId_createdAt_idx" ON "SupportTicketMessage"("authorId", "createdAt");
 
