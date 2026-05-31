@@ -91,8 +91,14 @@ export default function RidersPage() {
         status: String(r?.status || (r?.isActive === false ? 'INACTIVE' : 'ACTIVE')),
         createdAt: r?.createdAt || new Date().toISOString(),
       }));
-      setRiders(safeItems);
-      setTotalCount(normalized.total || safeItems.length);
+      const filteredItems = safeItems.filter((r: any) => {
+        const matchesKyc = !kycStatus || r.kycStatus === kycStatus;
+        const matchesStatus = !status || r.status === status;
+        return matchesKyc && matchesStatus;
+      });
+
+      setRiders(filteredItems);
+      setTotalCount(filteredItems.length);
     } catch (err: any) {
       setError(err.message || 'Failed to load riders');
     } finally {
