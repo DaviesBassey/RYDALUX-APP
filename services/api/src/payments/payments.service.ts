@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -70,6 +70,7 @@ export function calculateShare(amountMinor: bigint, basisPoints: number): bigint
 
 @Injectable()
 export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name);
   constructor(private readonly prisma: PrismaService) {}
 
   async initiateMockPayment(userId: string, tripId: string) {
@@ -361,37 +362,69 @@ export class PaymentsService {
     return { items, total, limit, offset };
   }
 
-  async listPayments(limit = 20, offset = 0) {
-    const [items, total] = await Promise.all([
-      this.prisma.payment.findMany({
-        include: {
-          user: { select: { id: true, displayName: true, phone: true, email: true } },
-          trip: { select: { id: true, reference: true, status: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-        skip: offset,
-        take: limit,
-      }),
-      this.prisma.payment.count(),
-    ]);
+  async listPayments(limit = 20, offset = 0, status?: string, provider?: string) {
+    try {
+      const where: any = {};
+      if (status) {
+        where.status = status as any;
+      }
+      if (provider) {
+        where.provider = provider;
+      }
+      const [items, total] = await Promise.all([
+        this.prisma.payment.findMany({
+          where,
+          include: {
+            user: { select: { id: true, displayName: true, phone: true, email: true } },
+            trip: { select: { id: true, reference: true, status: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+          skip: offset,
+          take: limit,
+        }),
+        this.prisma.payment.count({ where }),
+      ]);
 
-    return {
-      items: items.map((p) => ({
-        id: p.id,
-        tripId: p.tripId,
-        amount: p.amount,
-        currency: p.currency,
-        status: p.status,
-        reference: p.reference,
-        provider: p.provider,
-        createdAt: p.createdAt,
-        user: p.user,
-        trip: p.trip,
-      })),
-      total,
-      limit,
-      offset,
-    };
+      return {
+        items: items.map((p) => {
+          const mappedUser = p.user
+            ? {
+                id: p.user.id,
+                displayName: p.user.displayName ?? null,
+                phone: p.user.phone ?? null,
+                email: p.user.email,
+              }
+            : null;
+
+          const mappedTrip = p.trip
+            ? {
+                id: p.trip.id,
+                reference: p.trip.reference,
+                status: p.trip.status ? p.trip.status.toString() : 'UNKNOWN',
+              }
+            : null;
+
+          return {
+            id: p.id,
+            tripId: p.tripId ?? null,
+            amount: p.amount ? Number(p.amount) : 0,
+            currency: p.currency ?? 'NGN',
+            status: p.status ? p.status.toString() : 'PENDING',
+            reference: p.reference ?? '',
+            provider: p.provider ?? 'unknown',
+            createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : new Date(p.createdAt).toISOString(),
+            user: mappedUser,
+            trip: mappedTrip,
+          };
+        }),
+        total: Number(total) || 0,
+        limit: Number(limit) || 20,
+        offset: Number(offset) || 0,
+      };
+    } catch (error) {
+      this.logger.error('Failed to list payments in PaymentsService:', error);
+      throw error;
+    }
   }
 
   async listPendingPayouts(limit = 20, offset = 0) {
