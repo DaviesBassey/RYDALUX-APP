@@ -361,9 +361,17 @@ export class PaymentsService {
     return { items, total, limit, offset };
   }
 
-  async listPayments(limit = 20, offset = 0) {
+  async listPayments(limit = 20, offset = 0, status?: string, provider?: string) {
+    const where: any = {};
+    if (status) {
+      where.status = status as any;
+    }
+    if (provider) {
+      where.provider = provider;
+    }
     const [items, total] = await Promise.all([
       this.prisma.payment.findMany({
+        where,
         include: {
           user: { select: { id: true, displayName: true, phone: true, email: true } },
           trip: { select: { id: true, reference: true, status: true } },
@@ -372,14 +380,14 @@ export class PaymentsService {
         skip: offset,
         take: limit,
       }),
-      this.prisma.payment.count(),
+      this.prisma.payment.count({ where }),
     ]);
 
     return {
       items: items.map((p) => ({
         id: p.id,
         tripId: p.tripId,
-        amount: p.amount,
+        amount: Number(p.amount), // Safely convert Decimal to number
         currency: p.currency,
         status: p.status,
         reference: p.reference,
