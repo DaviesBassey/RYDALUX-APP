@@ -29,70 +29,70 @@ const RIDER_B_USER_ID = 'c02a2a2a-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
 const RIDER_C_USER_ID = 'c03a3a3a-a3a3-a3a3-a3a3-a3a3a3a3a3a3';
 
 const RIDER_A_PROFILE_ID = 'c01b1b1b-b1b1-b1b1-b1b1-b1b1b1b1b1b1';
-const RIDER_B_PROFILE_ID = 'c02b2b2b-b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2';
-const RIDER_C_PROFILE_ID = 'c03b2b2b-b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b3';
+const RIDER_B_PROFILE_ID = 'c02b2b2b-b2b2-b2b2-b2b2-b2b2b2b2b2b2';
+const RIDER_C_PROFILE_ID = 'c03b2b2b-b2b2-b2b2-b2b2-b2b2b2b2b2b3';
 
 const DRIVER_A_USER_ID = 'd01a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
-const DRIVER_B_USER_ID = 'd02a2a2a-a2a2-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
-const DRIVER_C_USER_ID = 'd03a3a3a-a3a3-a3a3-a3a3-a3a3-a3a3a3a3a3a3';
+const DRIVER_B_USER_ID = 'd02a2a2a-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
+const DRIVER_C_USER_ID = 'd03a3a3a-a3a3-a3a3-a3a3-a3a3a3a3a3a3';
 
 const DRIVER_A_PROFILE_ID = 'd01b1b1b-b1b1-b1b1-b1b1-b1b1b1b1b1b1';
-const DRIVER_B_PROFILE_ID = 'd02b2b2b-b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2';
-const DRIVER_C_PROFILE_ID = 'd03b2b2b-b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b3';
+const DRIVER_B_PROFILE_ID = 'd02b2b2b-b2b2-b2b2-b2b2-b2b2b2b2b2b2';
+const DRIVER_C_PROFILE_ID = 'd03b2b2b-b2b2-b2b2-b2b2-b2b2b2b2b2b3';
 
 const VEHICLE_A_ID = 'a01a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
 const VEHICLE_B_ID = 'a02a2a2a-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
 const VEHICLE_C_ID = 'a03a3a3a-a3a3-a3a3-a3a3-a3a3a3a3a3a3';
 
 const BANK_A_ID = 'b01a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
-const BANK_B_ID = 'b02a2a2a-a2a2-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
+const BANK_B_ID = 'b02a2a2a-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
 const BANK_C_ID = 'b03a3a3a-a3a3-a3a3-a3a3-a3a3a3a3a3a3';
 
 const DOC_A_ID = 'e01d1d1d-d1d1-d1d1-d1d1-d1d1d1d1d1d1';
 const DOC_B_ID = 'e02d2d2d-d2d2-d2d2-d2d2-d2d2d2d2d2d2';
 const DOC_C_ID = 'e03d3d3d-d3d3-d3d3-d3d3-d3d3d3d3d3d3';
 
-const KYC_A_ID = 'k01a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
-const KYC_B_ID = 'k02a2a2a-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
-const KYC_C_ID = 'k03a3a3a-a3a3-a3a3-a3a3-a3a3a3a3a3a3';
+const KYC_A_ID = '901a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
+const KYC_B_ID = '902a2a2a-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
+const KYC_C_ID = '903a3a3a-a3a3-a3a3-a3a3-a3a3a3a3a3a3';
 
-const TRIP_1_ID = 't01a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
-const TRIP_2_ID = 't02a2a2a-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
-const TRIP_3_ID = 't03a3a3a-a3a3-a3a3-a3a3-a3a3a3a3a3a3';
-const TRIP_4_ID = 't04a4a4a-a4a4-a4a4-a4a4-a4a4a4a4a4a4';
-const TRIP_5_ID = 't05a5a5a-a5a5-a5a5-a5a5-a5a5a5a5a5a5';
+const TRIP_1_ID = '701a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
+const TRIP_2_ID = '702a2a2a-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
+const TRIP_3_ID = '703a3a3a-a3a3-a3a3-a3a3-a3a3a3a3a3a3';
+const TRIP_4_ID = '704a4a4a-a4a4-a4a4-a4a4-a4a4a4a4a4a4';
+const TRIP_5_ID = '705a5a5a-a5a5-a5a5-a5a5-a5a5a5a5a5a5';
 
-const PAYMENT_1_ID = 'p01a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
-const PAYMENT_2_ID = 'p02a2a2a-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
-const PAYMENT_3_ID = 'p03a3a3a-a3a3-a3a3-a3a3-a3a3a3a3a3a3';
+const PAYMENT_1_ID = '801a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
+const PAYMENT_2_ID = '802a2a2a-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
+const PAYMENT_3_ID = '803a3a3a-a3a3-a3a3-a3a3-a3a3a3a3a3a3';
 
-const PAYOUT_1_ID = 'w01a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
-const PAYOUT_2_ID = 'w02a2a2a-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
-const PAYOUT_3_ID = 'w03a3a3a-a3a3-a3a3-a3a3-a3a3a3a3a3a3';
-const PAYOUT_4_ID = 'w04a4a4a-a4a4-a4a4-a4a4-a4a4a4a4a4a4';
+const PAYOUT_1_ID = '811a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
+const PAYOUT_2_ID = '812a2a2a-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
+const PAYOUT_3_ID = '813a3a3a-a3a3-a3a3-a3a3-a3a3a3a3a3a3';
+const PAYOUT_4_ID = '814a4a4a-a4a4-a4a4-a4a4-a4a4a4a4a4a4';
 
-const WALLET_RIDER_A_ID = 'wl01a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
-const WALLET_RIDER_B_ID = 'wl02a2a2a-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
-const WALLET_RIDER_C_ID = 'wl03a3a3a-a3a3-a3a3-a3a3-a3a3-a3a3a3a3a3a3';
-const WALLET_DRIVER_A_ID = 'wl11a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
-const WALLET_DRIVER_B_ID = 'wl12a2a2a-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
-const WALLET_DRIVER_C_ID = 'wl13a3a3a-a3a3-a3a3-a3a3-a3a3-a3a3a3a3a3a3';
+const WALLET_RIDER_A_ID = '501a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
+const WALLET_RIDER_B_ID = '502a2a2a-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
+const WALLET_RIDER_C_ID = '503a3a3a-a3a3-a3a3-a3a3-a3a3a3a3a3a3';
+const WALLET_DRIVER_A_ID = '511a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
+const WALLET_DRIVER_B_ID = '512a2a2a-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
+const WALLET_DRIVER_C_ID = '513a3a3a-a3a3-a3a3-a3a3-a3a3a3a3a3a3';
 
 const FT_1_ID = 'f01a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
 const ENTRY_1_ID = 'e01a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
 const ENTRY_2_ID = 'e02a2a2a-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
 const ENTRY_3_ID = 'e03a3a3a-a3a3-a3a3-a3a3-a3a3a3a3a3a3';
 
-const SOS_1_ID = 's01a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
-const INCIDENT_1_ID = 'i01a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
+const SOS_1_ID = '601a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
+const INCIDENT_1_ID = '611a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
 
-const TICKET_1_ID = 'tk01a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
-const TICKET_2_ID = 'tk02a2a2a-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
-const MSG_1_ID = 'm01a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
-const MSG_2_ID = 'm02a2a2a-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
-const MSG_3_ID = 'm03a3a3a-a3a3-a3a3-a3a3-a3a3a3a3a3a3';
+const TICKET_1_ID = '621a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
+const TICKET_2_ID = '622a2a2a-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
+const MSG_1_ID = '631a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
+const MSG_2_ID = '632a2a2a-a2a2-a2a2-a2a2-a2a2a2a2a2a2';
+const MSG_3_ID = '633a3a3a-a3a3-a3a3-a3a3-a3a3a3a3a3a3';
 
-const ATTACHMENT_STAGING_A_ID = 'at01a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
+const ATTACHMENT_STAGING_A_ID = '641a1a1a-a1a1-a1a1-a1a1-a1a1a1a1a1a1';
 
 async function main() {
   console.log('=== STARTING SAFE STAGING OPERATIONS SEED ===');
@@ -576,8 +576,8 @@ async function main() {
       id: TRIP_4_ID,
       reference: 'TRIP-STAGING-004',
       riderProfileId: RIDER_A_PROFILE_ID,
-      driverProfileId: null,
-      vehicleId: null,
+      driverProfileId: DRIVER_A_PROFILE_ID,
+      vehicleId: VEHICLE_A_ID,
       serviceType: ServiceType.REGULAR,
       status: TripStatus.REQUESTED,
       pickup: 'Chevron Drive, Lekki, Lagos',
@@ -874,9 +874,11 @@ async function main() {
   const supportUser = await prisma.user.findFirst({
     where: { email: 'support@rydalux.local' }
   });
-  const adminUser = await prisma.adminUser.findFirst({
-    where: { userId: supportUser?.id || '' }
-  });
+  const adminUser = supportUser?.id
+    ? await prisma.adminUser.findFirst({
+        where: { userId: supportUser.id }
+      })
+    : null;
 
   const supportTickets = [
     {
