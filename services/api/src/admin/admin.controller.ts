@@ -555,13 +555,15 @@ export class AdminController {
         currency: p.currency,
         status: p.status,
         provider: p.provider,
-        createdAt: p.createdAt,
-        driver: {
-          id: p.driverProfile.user.id,
-          name: p.driverProfile.user.displayName,
-          phone: p.driverProfile.user.phone,
-          email: p.driverProfile.user.email,
-        },
+        createdAt: p.createdAt ? p.createdAt.toISOString() : null,
+        driver: p.driverProfile?.user
+          ? {
+              id: p.driverProfile.user.id,
+              name: p.driverProfile.user.displayName || '',
+              phone: p.driverProfile.user.phone || '',
+              email: p.driverProfile.user.email || '',
+            }
+          : null,
       })),
       total,
       limit: Number(limit) || 20,

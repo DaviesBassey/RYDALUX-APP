@@ -13,42 +13,42 @@ export class SafetyController {
 
   @Post('sos')
   async createSos(@Request() req: any, @Body() dto: CreateSosEventDto) {
-    return this.safetyService.createSosEvent(req.user.id, dto);
+    return this.safetyService.createSosEvent(req.user.userId, dto);
   }
 
   @Get('sos/:id')
   async getSos(@Request() req: any, @Param('id') sosEventId: string) {
-    return this.safetyService.getSosEvent(sosEventId, req.user.id);
+    return this.safetyService.getSosEvent(sosEventId, req.user.userId);
   }
 
   @Post('incidents')
   async createIncident(@Request() req: any, @Body() dto: CreateIncidentReportDto) {
-    return this.safetyService.createIncidentReport(req.user.id, dto);
+    return this.safetyService.createIncidentReport(req.user.userId, dto);
   }
 
   @Get('incidents/:id')
   async getIncident(@Request() req: any, @Param('id') reportId: string) {
-    return this.safetyService.getIncidentReport(reportId, req.user.id);
+    return this.safetyService.getIncidentReport(reportId, req.user.userId);
   }
 
   @Post('trusted-contacts')
   async addTrustedContact(@Request() req: any, @Body() dto: AddTrustedContactDto) {
-    return this.safetyService.addTrustedContact(req.user.id, dto);
+    return this.safetyService.addTrustedContact(req.user.userId, dto);
   }
 
   @Get('trusted-contacts')
   async listTrustedContacts(@Request() req: any) {
-    return this.safetyService.listTrustedContacts(req.user.id);
+    return this.safetyService.listTrustedContacts(req.user.userId);
   }
 
   @Post('trusted-contacts/:id/remove')
   async removeTrustedContact(@Request() req: any, @Param('id') contactId: string) {
-    return this.safetyService.removeTrustedContact(req.user.id, contactId);
+    return this.safetyService.removeTrustedContact(req.user.userId, contactId);
   }
 
   @Post('share-trip')
   async generateShareLink(@Request() req: any, @Body() dto: GenerateShareLinkDto) {
-    return this.safetyService.generateShareLink(req.user.id, dto);
+    return this.safetyService.generateShareLink(req.user.userId, dto);
   }
 
   @Get('share-trip/:token')
@@ -58,13 +58,13 @@ export class SafetyController {
 
   @Post('share-trip/:id/expire')
   async expireShareLink(@Request() req: any, @Param('id') linkId: string) {
-    return this.safetyService.expireShareLink(req.user.id, linkId);
+    return this.safetyService.expireShareLink(req.user.userId, linkId);
   }
 
   @Post('check-in')
   async createCheckIn(@Request() req: any, @Body() body: any) {
     const { tripId, type, latitude, longitude } = body;
-    return this.safetyService.createSafetyCheckIn(tripId, req.user.id, type, latitude, longitude);
+    return this.safetyService.createSafetyCheckIn(tripId, req.user.userId, type, latitude, longitude);
   }
 
   @Get('check-in/:id')
