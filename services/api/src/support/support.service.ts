@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SupportStatus, SupportTicketType, SupportTicketPriority } from '@prisma/client';
@@ -22,6 +23,7 @@ interface TicketFilter {
 
 @Injectable()
 export class SupportService {
+  private readonly logger = new Logger(SupportService.name);
   constructor(private prisma: PrismaService) {}
 
   async createTicket(userId: string, dto: CreateSupportTicketDto) {
@@ -151,77 +153,86 @@ export class SupportService {
   }
 
   async listTickets(userId: string, filter: TicketFilter, offset: number = 0, limit: number = 20) {
-    const isAdminUser = await this.prisma.adminUser.findUnique({
-      where: { userId },
-    });
+    try {
+      if (!userId) {
+        throw new BadRequestException('User ID is required');
+      }
 
-    const where: any = {};
+      const isAdminUser = await this.prisma.adminUser.findUnique({
+        where: { userId },
+      });
 
-    // Non-admin users see only their own tickets
-    if (!isAdminUser) {
-      where.createdById = userId;
-    } else {
-      // Admin filters
-      if (filter.status) where.status = filter.status;
-      if (filter.type) where.type = filter.type;
-      if (filter.priority) where.priority = filter.priority;
-      if (filter.assignedToId) where.assignedToId = filter.assignedToId;
+      const where: any = {};
+
+      // Non-admin users see only their own tickets
+      if (!isAdminUser) {
+        where.createdById = userId;
+      } else {
+        // Admin filters
+        if (filter.status) where.status = filter.status;
+        if (filter.type) where.type = filter.type;
+        if (filter.priority) where.priority = filter.priority;
+        if (filter.assignedToId) where.assignedToId = filter.assignedToId;
+      }
+
+      const [tickets, total] = await Promise.all([
+        this.prisma.supportTicket.findMany({
+          where,
+          include: {
+            createdBy: {
+              select: { id: true, email: true, firstName: true, lastName: true },
+            },
+            assignedTo: {
+              select: { user: { select: { id: true, email: true, firstName: true, lastName: true } } },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          skip: offset,
+          take: limit,
+        }),
+        this.prisma.supportTicket.count({ where }),
+      ]);
+
+      return {
+        items: tickets.map((t) => {
+          const mappedCreatedBy = t.createdBy
+            ? {
+                id: t.createdBy.id,
+                firstName: t.createdBy.firstName || '',
+                lastName: t.createdBy.lastName || '',
+                email: t.createdBy.email || '',
+              }
+            : null;
+
+          const mappedAssignedTo = t.assignedTo?.user
+            ? {
+                id: t.assignedTo.user.id,
+                firstName: t.assignedTo.user.firstName || '',
+                lastName: t.assignedTo.user.lastName || '',
+                email: t.assignedTo.user.email || '',
+              }
+            : null;
+
+          return {
+            id: t.id,
+            title: t.title || '',
+            type: t.type || 'OTHER',
+            status: t.status || 'OPEN',
+            priority: t.priority || 'MEDIUM',
+            createdAt: t.createdAt ? t.createdAt.toISOString() : null,
+            updatedAt: t.updatedAt ? t.updatedAt.toISOString() : null,
+            createdBy: mappedCreatedBy,
+            assignedTo: mappedAssignedTo,
+          };
+        }),
+        total,
+        limit,
+        offset,
+      };
+    } catch (err: any) {
+      this.logger.error(`Failed to list tickets for user ${userId}: ${err.message}`, err.stack);
+      throw err;
     }
-
-    const [tickets, total] = await Promise.all([
-      this.prisma.supportTicket.findMany({
-        where,
-        include: {
-          createdBy: {
-            select: { id: true, email: true, firstName: true, lastName: true },
-          },
-          assignedTo: {
-            select: { user: { select: { id: true, email: true, firstName: true, lastName: true } } },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-        skip: offset,
-        take: limit,
-      }),
-      this.prisma.supportTicket.count({ where }),
-    ]);
-
-    return {
-      items: tickets.map((t) => {
-        const mappedCreatedBy = t.createdBy
-          ? {
-              id: t.createdBy.id,
-              firstName: t.createdBy.firstName || '',
-              lastName: t.createdBy.lastName || '',
-              email: t.createdBy.email || '',
-            }
-          : null;
-
-        const mappedAssignedTo = t.assignedTo?.user
-          ? {
-              id: t.assignedTo.user.id,
-              firstName: t.assignedTo.user.firstName || '',
-              lastName: t.assignedTo.user.lastName || '',
-              email: t.assignedTo.user.email || '',
-            }
-          : null;
-
-        return {
-          id: t.id,
-          title: t.title || '',
-          type: t.type || 'OTHER',
-          status: t.status || 'OPEN',
-          priority: t.priority || 'MEDIUM',
-          createdAt: t.createdAt ? t.createdAt.toISOString() : null,
-          updatedAt: t.updatedAt ? t.updatedAt.toISOString() : null,
-          createdBy: mappedCreatedBy,
-          assignedTo: mappedAssignedTo,
-        };
-      }),
-      total,
-      limit,
-      offset,
-    };
   }
 
   async addReply(ticketId: string, userId: string, dto: AddTicketReplyDto) {

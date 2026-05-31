@@ -7,6 +7,8 @@ import {
   Query,
   UseGuards,
   Req,
+  Logger,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
@@ -20,6 +22,7 @@ import { AssignTicketDto } from './dto/assign-ticket.dto';
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Permissions('SUPPORT_AGENT')
 export class SupportAdminController {
+  private readonly logger = new Logger(SupportAdminController.name);
   constructor(private supportService: SupportService) {}
 
   @Get('tickets')
@@ -33,24 +36,40 @@ export class SupportAdminController {
     @Query('offset') offset?: string,
     @Query('limit') limit?: string,
   ) {
-    const filter: any = {};
-    if (status) filter.status = status;
-    if (type) filter.type = type;
-    if (priority) filter.priority = priority;
-    if (assignedToId) filter.assignedToId = assignedToId;
+    try {
+      const userId = req.user?.userId || req.user?.sub || req.user?.id;
+      if (!userId) throw new UnauthorizedException('Missing authenticated user id');
 
-    const parsedLimit = Number(limit) || 20;
-    let parsedOffset = Number(offset) || 0;
-    if (page !== undefined && offset === undefined) {
-      parsedOffset = (Number(page) || 0) * parsedLimit;
+      const filter: any = {};
+      if (status) filter.status = status;
+      if (type) filter.type = type;
+      if (priority) filter.priority = priority;
+      if (assignedToId) filter.assignedToId = assignedToId;
+
+      const parsedLimit = Number(limit) || 20;
+      let parsedOffset = Number(offset) || 0;
+      if (page !== undefined && offset === undefined) {
+        parsedOffset = (Number(page) || 0) * parsedLimit;
+      }
+
+      return await this.supportService.listTickets(userId, filter, parsedOffset, parsedLimit);
+    } catch (err: any) {
+      this.logger.error(`Error in listAllTickets for user ${req.user?.userId || req.user?.sub || req.user?.id}: ${err.message}`, err.stack);
+      throw err;
     }
-
-    return this.supportService.listTickets(req.user.id, filter, parsedOffset, parsedLimit);
   }
 
   @Get('tickets/:ticketId')
   async getTicket(@Req() req: any, @Param('ticketId') ticketId: string) {
-    return this.supportService.getTicket(ticketId, req.user.id);
+    try {
+      const userId = req.user?.userId || req.user?.sub || req.user?.id;
+      if (!userId) throw new UnauthorizedException('Missing authenticated user id');
+
+      return await this.supportService.getTicket(ticketId, userId);
+    } catch (err: any) {
+      this.logger.error(`Error in getTicket for user ${req.user?.userId || req.user?.sub || req.user?.id}: ${err.message}`, err.stack);
+      throw err;
+    }
   }
 
   @Patch('tickets/:ticketId/status')
@@ -59,7 +78,15 @@ export class SupportAdminController {
     @Param('ticketId') ticketId: string,
     @Body() dto: ChangeTicketStatusDto,
   ) {
-    return this.supportService.changeStatus(ticketId, req.user.id, dto);
+    try {
+      const userId = req.user?.userId || req.user?.sub || req.user?.id;
+      if (!userId) throw new UnauthorizedException('Missing authenticated user id');
+
+      return await this.supportService.changeStatus(ticketId, userId, dto);
+    } catch (err: any) {
+      this.logger.error(`Error in changeStatus for user ${req.user?.userId || req.user?.sub || req.user?.id}: ${err.message}`, err.stack);
+      throw err;
+    }
   }
 
   @Patch('tickets/:ticketId/priority')
@@ -68,7 +95,15 @@ export class SupportAdminController {
     @Param('ticketId') ticketId: string,
     @Body() dto: ChangeTicketPriorityDto,
   ) {
-    return this.supportService.changePriority(ticketId, req.user.id, dto);
+    try {
+      const userId = req.user?.userId || req.user?.sub || req.user?.id;
+      if (!userId) throw new UnauthorizedException('Missing authenticated user id');
+
+      return await this.supportService.changePriority(ticketId, userId, dto);
+    } catch (err: any) {
+      this.logger.error(`Error in changePriority for user ${req.user?.userId || req.user?.sub || req.user?.id}: ${err.message}`, err.stack);
+      throw err;
+    }
   }
 
   @Patch('tickets/:ticketId/assign')
@@ -77,11 +112,27 @@ export class SupportAdminController {
     @Param('ticketId') ticketId: string,
     @Body() dto: AssignTicketDto,
   ) {
-    return this.supportService.assignTicket(ticketId, req.user.id, dto);
+    try {
+      const userId = req.user?.userId || req.user?.sub || req.user?.id;
+      if (!userId) throw new UnauthorizedException('Missing authenticated user id');
+
+      return await this.supportService.assignTicket(ticketId, userId, dto);
+    } catch (err: any) {
+      this.logger.error(`Error in assignTicket for user ${req.user?.userId || req.user?.sub || req.user?.id}: ${err.message}`, err.stack);
+      throw err;
+    }
   }
 
   @Patch('tickets/:ticketId/reopen')
   async reopenTicket(@Req() req: any, @Param('ticketId') ticketId: string) {
-    return this.supportService.reopenTicket(ticketId, req.user.id);
+    try {
+      const userId = req.user?.userId || req.user?.sub || req.user?.id;
+      if (!userId) throw new UnauthorizedException('Missing authenticated user id');
+
+      return await this.supportService.reopenTicket(ticketId, userId);
+    } catch (err: any) {
+      this.logger.error(`Error in reopenTicket for user ${req.user?.userId || req.user?.sub || req.user?.id}: ${err.message}`, err.stack);
+      throw err;
+    }
   }
 }
