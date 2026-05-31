@@ -34,29 +34,29 @@ export default function UsersPage() {
     {
       key: 'firstName',
       label: 'Name',
-      render: (first, row) => `${first} ${row.lastName}`,
+      render: (first, row) => `${first || ''} ${row?.lastName || ''}`.trim() || 'N/A',
     },
     {
       key: 'email',
       label: 'Email',
-      render: (value) => maskEmail(value),
+      render: (value) => value ? maskEmail(value) : '—',
     },
     {
       key: 'phone',
       label: 'Phone',
-      render: (value) => maskPhone(value),
+      render: (value) => value ? maskPhone(value) : '—',
     },
     {
       key: 'role',
       label: 'Role',
       render: (value) => (
-        <span className="capitalize">{value.toLowerCase().replace('_', ' ')}</span>
+        <span className="capitalize">{(value || 'UNKNOWN').toLowerCase().replace('_', ' ')}</span>
       ),
     },
     {
       key: 'status',
       label: 'Status',
-      render: (value) => <StatusBadge status={value} />,
+      render: (value) => <StatusBadge status={value || 'UNKNOWN'} />,
     },
     {
       key: 'lastLogin',
@@ -66,7 +66,7 @@ export default function UsersPage() {
     {
       key: 'createdAt',
       label: 'Created',
-      render: (value) => formatDate(value),
+      render: (value) => value ? formatDate(value) : '—',
     },
   ];
 

@@ -36,41 +36,44 @@ export default function LedgerPage() {
   const pageSize = 25;
 
   const accountColumns: DataTableColumn<LedgerAccount>[] = [
-    { key: 'code', label: 'Account Code' },
-    { key: 'name', label: 'Account Name' },
+    { key: 'code', label: 'Account Code', render: (val) => val || '—' },
+    { key: 'name', label: 'Account Name', render: (val) => val || '—' },
     {
       key: 'accountType',
       label: 'Type',
-      render: (value) => value.split('_').join(' ').toUpperCase(),
+      render: (value) => (value || 'UNKNOWN').split('_').join(' ').toUpperCase(),
     },
     {
       key: 'balance',
       label: 'Balance',
-      render: (balance, row) => formatCurrency(balance, (row as any).currency),
+      render: (balance, row) => formatCurrency(balance || 0, (row as any).currency || 'NGN'),
     },
   ];
 
   const transactionColumns: DataTableColumn<LedgerTransaction>[] = [
-    { key: 'reference', label: 'Reference' },
-    { key: 'accountCode', label: 'Account' },
+    { key: 'reference', label: 'Reference', render: (val) => val || '—' },
+    { key: 'accountCode', label: 'Account', render: (val) => val || '—' },
     {
       key: 'type',
       label: 'Type',
-      render: (value) => (
-        <span className={value === 'DEBIT' ? 'text-red-600 font-medium' : 'text-green-600 font-medium'}>
-          {value}
-        </span>
-      ),
+      render: (value) => {
+        const displayVal = value || 'UNKNOWN';
+        return (
+          <span className={displayVal === 'DEBIT' ? 'text-red-600 font-medium' : 'text-green-600 font-medium'}>
+            {displayVal}
+          </span>
+        );
+      },
     },
     {
       key: 'amount',
       label: 'Amount',
-      render: (amount) => formatCurrency(amount),
+      render: (amount) => formatCurrency(amount || 0),
     },
     {
       key: 'createdAt',
       label: 'Date',
-      render: (value) => formatDateTime(value),
+      render: (value) => value ? formatDateTime(value) : '—',
     },
   ];
 
@@ -82,9 +85,10 @@ export default function LedgerPage() {
         api.getLedgerAccounts(),
         api.getLedgerTransactions(pageSize, currentPage * pageSize),
       ]);
-      setAccounts(accRes || []);
-      setTransactions(transRes.items || []);
-      setTotalCount(transRes.total || 0);
+      const accountList = Array.isArray(accRes) ? accRes : (accRes?.items || []);
+      setAccounts(accountList);
+      setTransactions(transRes?.items || []);
+      setTotalCount(transRes?.total || 0);
     } catch (err: any) {
       setError(err.message || 'Failed to load ledger data');
     } finally {
