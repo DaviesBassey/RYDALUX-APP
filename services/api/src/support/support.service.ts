@@ -150,7 +150,7 @@ export class SupportService {
     return ticket;
   }
 
-  async listTickets(userId: string, filter: TicketFilter, page: number = 0, limit: number = 20) {
+  async listTickets(userId: string, filter: TicketFilter, offset: number = 0, limit: number = 20) {
     const isAdminUser = await this.prisma.adminUser.findUnique({
       where: { userId },
     });
@@ -178,20 +178,49 @@ export class SupportService {
           assignedTo: {
             select: { user: { select: { id: true, email: true, firstName: true, lastName: true } } },
           },
-          messages: { take: 1, orderBy: { createdAt: 'desc' } },
         },
         orderBy: { createdAt: 'desc' },
-        skip: page * limit,
+        skip: offset,
         take: limit,
       }),
       this.prisma.supportTicket.count({ where }),
     ]);
 
     return {
-      items: tickets,
+      items: tickets.map((t) => {
+        const mappedCreatedBy = t.createdBy
+          ? {
+              id: t.createdBy.id,
+              firstName: t.createdBy.firstName || '',
+              lastName: t.createdBy.lastName || '',
+              email: t.createdBy.email || '',
+            }
+          : null;
+
+        const mappedAssignedTo = t.assignedTo?.user
+          ? {
+              id: t.assignedTo.user.id,
+              firstName: t.assignedTo.user.firstName || '',
+              lastName: t.assignedTo.user.lastName || '',
+              email: t.assignedTo.user.email || '',
+            }
+          : null;
+
+        return {
+          id: t.id,
+          title: t.title || '',
+          type: t.type || 'OTHER',
+          status: t.status || 'OPEN',
+          priority: t.priority || 'MEDIUM',
+          createdAt: t.createdAt ? t.createdAt.toISOString() : null,
+          updatedAt: t.updatedAt ? t.updatedAt.toISOString() : null,
+          createdBy: mappedCreatedBy,
+          assignedTo: mappedAssignedTo,
+        };
+      }),
       total,
-      page,
       limit,
+      offset,
     };
   }
 

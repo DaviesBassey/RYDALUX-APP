@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, normalizeListResponse } from '@/lib/api';
 import { DataTable, DataTableColumn } from '@/lib/components/DataTable';
 import { StatusBadge } from '@/lib/components/StatusBadge';
 import { PageHeader } from '@/lib/components/PageHeader';
@@ -14,7 +14,7 @@ interface SupportTicket {
   status: string;
   priority: string;
   createdBy: { firstName: string; lastName: string; email: string };
-  assignedTo?: { user: { firstName: string; lastName: string } };
+  assignedTo?: { user?: { firstName: string; lastName: string }; firstName?: string; lastName?: string; email?: string };
   createdAt: string;
   updatedAt: string;
 }
@@ -32,7 +32,7 @@ export default function SupportPage() {
   const pageSize = 20;
 
   const columns: DataTableColumn<SupportTicket>[] = [
-    { key: 'title', label: 'Title', width: '250px' },
+    { key: 'title', label: 'Title', width: '250px', render: (val) => val || '—' },
     {
       key: 'type',
       label: 'Type',
@@ -51,18 +51,20 @@ export default function SupportPage() {
           SHIPMENT_ISSUE: 'Shipment',
           OTHER: 'Other',
         };
-        return typeLabels[value] || value;
+        const val = value || 'OTHER';
+        return typeLabels[val] || val;
       },
     },
     {
       key: 'status',
       label: 'Status',
-      render: (value) => <StatusBadge status={value} />,
+      render: (value) => <StatusBadge status={value || 'OPEN'} />,
     },
     {
       key: 'priority',
       label: 'Priority',
       render: (value) => {
+        const val = value || 'MEDIUM';
         const colors: Record<string, string> = {
           LOW: 'badge-gray',
           MEDIUM: 'badge-info',
@@ -70,8 +72,8 @@ export default function SupportPage() {
           URGENT: 'badge-danger',
         };
         return (
-          <span className={colors[value] || 'badge-gray'}>
-            {value.charAt(0).toUpperCase() + value.slice(1).toLowerCase()}
+          <span className={colors[val] || 'badge-gray'}>
+            {val.charAt(0).toUpperCase() + val.slice(1).toLowerCase()}
           </span>
         );
       },
@@ -79,17 +81,22 @@ export default function SupportPage() {
     {
       key: 'createdBy',
       label: 'Created By',
-      render: (creator) => `${creator?.firstName || ''} ${creator?.lastName || ''}`,
+      render: (creator) => creator ? `${creator.firstName || ''} ${creator.lastName || ''}`.trim() || creator.email || '—' : '—',
     },
     {
       key: 'assignedTo',
       label: 'Assigned To',
-      render: (assigned) => assigned?.user ? `${assigned.user.firstName} ${assigned.user.lastName}` : 'Unassigned',
+      render: (assigned) => {
+        if (!assigned) return 'Unassigned';
+        const firstName = assigned.firstName ?? assigned.user?.firstName ?? '';
+        const lastName = assigned.lastName ?? assigned.user?.lastName ?? '';
+        return `${firstName} ${lastName}`.trim() || assigned.email || 'Assigned';
+      },
     },
     {
       key: 'createdAt',
       label: 'Created',
-      render: (value) => formatTimeAgo(value),
+      render: (value) => value ? formatTimeAgo(value) : '—',
     },
   ];
 
@@ -104,8 +111,9 @@ export default function SupportPage() {
         pageSize,
         currentPage * pageSize
       );
-      setTickets(res.items || []);
-      setTotalCount(res.total || 0);
+      const normalized = normalizeListResponse<SupportTicket>(res);
+      setTickets(normalized.items);
+      setTotalCount(normalized.total);
     } catch (err: any) {
       setError(err.message || 'Failed to load support tickets');
     } finally {

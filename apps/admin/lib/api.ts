@@ -359,3 +359,18 @@ export const api = {
   // App Settings
   getAppSettings: () => fetchJson<any>('/admin/settings'),
 };
+
+export function normalizeListResponse<T>(res: any): { items: T[]; total: number; limit: number; offset: number } {
+  if (!res) {
+    return { items: [], total: 0, limit: 20, offset: 0 };
+  }
+  if (Array.isArray(res)) {
+    return { items: res, total: res.length, limit: res.length, offset: 0 };
+  }
+  return {
+    items: Array.isArray(res.items) ? res.items : [],
+    total: Number(res.total) || (Array.isArray(res.items) ? res.items.length : 0),
+    limit: Number(res.limit) || 20,
+    offset: Number(res.offset) || 0,
+  };
+}

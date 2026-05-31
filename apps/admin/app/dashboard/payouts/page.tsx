@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, normalizeListResponse } from '@/lib/api';
 import { DataTable, DataTableColumn } from '@/lib/components/DataTable';
 import { StatusBadge } from '@/lib/components/StatusBadge';
 import { PageHeader } from '@/lib/components/PageHeader';
@@ -30,26 +30,29 @@ export default function PayoutsPage() {
   const pageSize = 20;
 
   const columns: DataTableColumn<Payout>[] = [
-    { key: 'reference', label: 'Reference', width: '120px' },
+    { key: 'reference', label: 'Reference', width: '120px', render: (val) => val || '—' },
     {
       key: 'driverProfile',
       label: 'Driver',
-      render: (profile) => `${profile?.user?.firstName || ''} ${profile?.user?.lastName || ''}`,
+      render: (profile, row) => {
+        const driverName = (row as any).driver?.name ?? `${profile?.user?.firstName || ''} ${profile?.user?.lastName || ''}`;
+        return driverName.trim() || (row as any).driver?.email || '—';
+      },
     },
     {
       key: 'amount',
       label: 'Amount',
-      render: (amount, row) => formatCurrency(amount, (row as any).currency),
+      render: (amount, row) => formatCurrency(amount || 0, (row as any).currency || 'NGN'),
     },
     {
       key: 'paymentMethod',
       label: 'Method',
-      render: (value) => value.charAt(0).toUpperCase() + value.slice(1),
+      render: (value) => value ? value.charAt(0).toUpperCase() + value.slice(1).toLowerCase() : '—',
     },
     {
       key: 'status',
       label: 'Status',
-      render: (value) => <StatusBadge status={value} />,
+      render: (value) => <StatusBadge status={value || 'PENDING'} />,
     },
     {
       key: 'processedAt',
@@ -59,7 +62,7 @@ export default function PayoutsPage() {
     {
       key: 'createdAt',
       label: 'Created',
-      render: (value) => formatTimeAgo(value),
+      render: (value) => value ? formatTimeAgo(value) : '—',
     },
   ];
 
@@ -68,8 +71,9 @@ export default function PayoutsPage() {
     setError('');
     try {
       const res = await api.getPayouts(status || undefined, pageSize, currentPage * pageSize);
-      setPayouts(res.items || []);
-      setTotalCount(res.total || 0);
+      const normalized = normalizeListResponse<Payout>(res);
+      setPayouts(normalized.items);
+      setTotalCount(normalized.total);
     } catch (err: any) {
       setError(err.message || 'Failed to load payouts');
     } finally {
