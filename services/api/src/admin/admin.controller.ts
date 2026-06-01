@@ -449,11 +449,24 @@ export class AdminController {
   // ── Missing Admin Dashboard Compatibility Routes ─────────────────────────────
 
   @Get('users')
-  async listUsers(@Query('type') type?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
-    const where: any = { deletedAt: null };
-    if (type) {
+  async listUsers(
+    @Query('type') type?: string,
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const where: any = {};
+    const allowedTypes = ['RIDER', 'DRIVER', 'ADMIN'];
+    const allowedStatuses = ['ACTIVE', 'INACTIVE'];
+
+    if (type && allowedTypes.includes(type)) {
       where.userType = type as any;
     }
+
+    if (status && allowedStatuses.includes(status)) {
+      where.deletedAt = status === 'ACTIVE' ? null : { not: null };
+    }
+
     const [items, total] = await Promise.all([
       this.prisma.user.findMany({
         where,
@@ -470,7 +483,7 @@ export class AdminController {
         firstName: u.firstName || '',
         lastName: u.lastName || '',
         phone: u.phone || '',
-        role: u.userType || 'UNKNOWN',
+        role: String(u.userType || 'UNKNOWN'),
         status: u.deletedAt ? 'INACTIVE' : 'ACTIVE',
         createdAt: u.createdAt ? u.createdAt.toISOString() : null,
         lastLogin: u.lastLoginAt ? u.lastLoginAt.toISOString() : null,
