@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, normalizeListResponse } from '@/lib/api';
 import { DataTable, DataTableColumn } from '@/lib/components/DataTable';
 import { StatusBadge } from '@/lib/components/StatusBadge';
 import { PageHeader } from '@/lib/components/PageHeader';
@@ -74,9 +74,28 @@ export default function UsersPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await api.getUsers(role || undefined, pageSize, currentPage * pageSize);
-      setUsers(res.items || []);
-      setTotalCount(res.total || 0);
+      const res = await api.getUsers(role || undefined, status || undefined, pageSize, currentPage * pageSize);
+      const normalized = normalizeListResponse<any>(res);
+      const safeItems = normalized.items.map((u: any, idx: number) => ({
+        id: u?.id || `user-row-${idx}`,
+        email: u?.email || '',
+        firstName: u?.firstName || '',
+        lastName: u?.lastName || '',
+        phone: u?.phone || '',
+        role: String(u?.role || u?.userType || 'UNKNOWN'),
+        status: String(u?.status || 'ACTIVE'),
+        createdAt: u?.createdAt || '',
+        lastLogin: u?.lastLogin || u?.lastLoginAt || '',
+      }));
+
+      const filteredItems = safeItems.filter((u: any) => {
+        const matchesRole = !role || u.role === role;
+        const matchesStatus = !status || u.status === status;
+        return matchesRole && matchesStatus;
+      });
+
+      setUsers(filteredItems);
+      setTotalCount(normalized.total || filteredItems.length);
     } catch (err: any) {
       setError(err.message || 'Failed to load users');
     } finally {
@@ -107,18 +126,16 @@ export default function UsersPage() {
 
       <div className="mb-6 flex gap-4 flex-wrap">
         <select value={role} onChange={(e) => setRole(e.target.value)} className="input-field w-48">
-          <option value="">All Roles</option>
+          <option value="">All User Types</option>
+          <option value="RIDER">Rider</option>
+          <option value="DRIVER">Driver</option>
           <option value="ADMIN">Admin</option>
-          <option value="SAFETY_OFFICER">Safety Officer</option>
-          <option value="SUPPORT">Support</option>
-          <option value="FINANCE_MANAGER">Finance Manager</option>
         </select>
 
         <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-field w-48">
           <option value="">All Statuses</option>
           <option value="ACTIVE">Active</option>
           <option value="INACTIVE">Inactive</option>
-          <option value="SUSPENDED">Suspended</option>
         </select>
       </div>
 

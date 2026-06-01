@@ -351,8 +351,8 @@ export const api = {
     fetchJson<any>(`/admin/audit-logs?${new URLSearchParams({ ...(actor ? { actor } : {}), ...(entity ? { entity } : {}), ...(action ? { action } : {}), limit: String(limit), offset: String(offset) })}`),
 
   // Users & Riders
-  getUsers: (type?: string, limit = 20, offset = 0) =>
-    fetchJson<any>(`/admin/users?${new URLSearchParams({ ...(type ? { type } : {}), limit: String(limit), offset: String(offset) })}`),
+  getUsers: (type?: string, status?: string, limit = 20, offset = 0) =>
+    fetchJson<any>(`/admin/users?${new URLSearchParams({ ...(type ? { type } : {}), ...(status ? { status } : {}), limit: String(limit), offset: String(offset) })}`),
   getRiders: (limit = 20, offset = 0) =>
     fetchJson<any>(`/admin/riders?limit=${limit}&offset=${offset}`),
 
