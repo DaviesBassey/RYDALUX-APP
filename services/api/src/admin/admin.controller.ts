@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Patch, Post, Query, Req, UseGuards, BadRequestException } from '@nestjs/common';
 import { Request } from 'express';
 import { AdminService } from './admin.service';
 import { PaymentsService } from '../payments/payments.service';
@@ -125,8 +125,50 @@ export class AdminController {
 
   @Get('audit-logs')
   @Permissions('READ_ONLY_AUDITOR')
-  getAuditLogs() {
-    return this.adminService.getAuditLogs();
+  getAuditLogs(
+    @Query('actor') actor?: string,
+    @Query('entity') entity?: string,
+    @Query('action') action?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const allowedEntities = [
+      'USER',
+      'TRIP',
+      'PAYMENT',
+      'PAYOUT',
+      'SUPPORT_TICKET',
+      'SOS_EVENT',
+      'INCIDENT_REPORT',
+      'KYC',
+      'VEHICLE',
+      'ADMIN',
+      'VEHICLE_DOCUMENT',
+      'DRIVER_DOCUMENT',
+      'SAFETY_FLAG',
+      'SUPPORT_TICKET_MESSAGE',
+      'SUPPORT_TICKET_ATTACHMENT',
+      'PAYOUT_ACCOUNT',
+      'LEDGER_ACCOUNT',
+      'RECONCILIATION_JOB',
+      'PROVIDER_EVENT',
+      'DISPUTE',
+      'REFUND',
+      'SHIPMENT'
+    ];
+    if (entity && !allowedEntities.includes(entity.toUpperCase())) {
+      throw new BadRequestException(`Invalid entity filter: ${entity}`);
+    }
+    if (action && !/^[A-Za-z0-9_]+$/.test(action)) {
+      throw new BadRequestException(`Invalid action filter: ${action}`);
+    }
+    return this.adminService.getAuditLogs({
+      actor,
+      entity: entity ? entity.toUpperCase() : undefined,
+      action: action ? action.toUpperCase() : undefined,
+      limit: Number(limit) || 50,
+      offset: Number(offset) || 0,
+    });
   }
 
   @Get('sos-events')
@@ -163,11 +205,19 @@ export class AdminController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
+    const allowedStatuses = ['PENDING', 'AUTHORIZED', 'CAPTURED', 'FAILED', 'REFUNDED', 'CANCELLED'];
+    if (status && !allowedStatuses.includes(status.toUpperCase())) {
+      throw new BadRequestException(`Invalid payment status: ${status}`);
+    }
+    const allowedProviders = ['paystack', 'flutterwave', 'mock', 'mock-paystack'];
+    if (provider && !allowedProviders.includes(provider.toLowerCase())) {
+      throw new BadRequestException(`Invalid payment provider: ${provider}`);
+    }
     return this.paymentsService.listPayments(
       Number(limit) || 20,
       Number(offset) || 0,
-      status,
-      provider,
+      status ? status.toUpperCase() : undefined,
+      provider ? provider.toLowerCase() : undefined,
     );
   }
 
@@ -374,7 +424,15 @@ export class AdminController {
   @Get('payouts/requests')
   @Permissions('FINANCE_MANAGER')
   getPayoutRequests(@Query('status') status?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
-    return this.payoutsService.getPayoutRequests(status, Number(limit) || 20, Number(offset) || 0);
+    const allowedStatuses = ['REQUESTED', 'APPROVED', 'PROCESSING', 'PAID', 'FAILED', 'REJECTED', 'CANCELLED'];
+    if (status && !allowedStatuses.includes(status.toUpperCase())) {
+      throw new BadRequestException(`Invalid payout status: ${status}`);
+    }
+    return this.payoutsService.getPayoutRequests(
+      status ? status.toUpperCase() : undefined,
+      Number(limit) || 20,
+      Number(offset) || 0
+    );
   }
 
   @Post('payouts/:id/approve-section17')
@@ -459,12 +517,18 @@ export class AdminController {
     const allowedTypes = ['RIDER', 'DRIVER', 'ADMIN'];
     const allowedStatuses = ['ACTIVE', 'INACTIVE'];
 
-    if (type && allowedTypes.includes(type)) {
-      where.userType = type as any;
+    if (type) {
+      if (!allowedTypes.includes(type.toUpperCase())) {
+        throw new BadRequestException(`Invalid user type: ${type}`);
+      }
+      where.userType = type.toUpperCase() as any;
     }
 
-    if (status && allowedStatuses.includes(status)) {
-      where.deletedAt = status === 'ACTIVE' ? null : { not: null };
+    if (status) {
+      if (!allowedStatuses.includes(status.toUpperCase())) {
+        throw new BadRequestException(`Invalid status: ${status}`);
+      }
+      where.deletedAt = status.toUpperCase() === 'ACTIVE' ? null : { not: null };
     }
 
     const [items, total] = await Promise.all([
@@ -514,8 +578,12 @@ export class AdminController {
   @Get('trips')
   async listTrips(@Query('status') status?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
     const where: any = {};
+    const allowedStatuses = ['DRAFT', 'QUOTED', 'REQUESTED', 'DRIVER_ASSIGNED', 'DRIVER_ARRIVING', 'DRIVER_ARRIVED', 'PIN_VERIFIED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED_BY_RIDER', 'CANCELLED_BY_DRIVER', 'EXPIRED', 'DISPUTED'];
     if (status) {
-      where.status = status as any;
+      if (!allowedStatuses.includes(status.toUpperCase())) {
+        throw new BadRequestException(`Invalid trip status: ${status}`);
+      }
+      where.status = status.toUpperCase() as any;
     }
     const [items, total] = await Promise.all([
       this.prisma.trip.findMany({
@@ -541,8 +609,12 @@ export class AdminController {
   @Permissions('FINANCE_MANAGER')
   async listPayouts(@Query('status') status?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
     const where: any = {};
+    const allowedStatuses = ['REQUESTED', 'APPROVED', 'PROCESSING', 'PAID', 'FAILED', 'REJECTED', 'CANCELLED'];
     if (status) {
-      where.status = status as any;
+      if (!allowedStatuses.includes(status.toUpperCase())) {
+        throw new BadRequestException(`Invalid payout status: ${status}`);
+      }
+      where.status = status.toUpperCase() as any;
     }
     const [items, total] = await Promise.all([
       this.prisma.payout.findMany({

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, normalizeListResponse } from '@/lib/api';
 import { DataTable, DataTableColumn } from '@/lib/components/DataTable';
 import { StatusBadge } from '@/lib/components/StatusBadge';
 import { PageHeader } from '@/lib/components/PageHeader';
@@ -79,8 +79,36 @@ export default function TripsPage() {
     setError('');
     try {
       const res = await api.getTrips(status || undefined, pageSize, currentPage * pageSize);
-      setTrips(res.items || []);
-      setTotalCount(res.total || 0);
+      const normalized = normalizeListResponse<Trip>(res);
+      const safeItems = normalized.items.map((t: any, idx: number) => ({
+        id: t?.id || `trip-row-${idx}`,
+        reference: t?.reference || '—',
+        status: t?.status || 'UNKNOWN',
+        pickupAddress: t?.pickupAddress || '—',
+        dropoffAddress: t?.dropoffAddress || '—',
+        riderProfile: {
+          user: {
+            firstName: t?.riderProfile?.user?.firstName || '',
+            lastName: t?.riderProfile?.user?.lastName || '',
+            email: t?.riderProfile?.user?.email || '',
+          }
+        },
+        driverProfile: t?.driverProfile?.user ? {
+          user: {
+            firstName: t.driverProfile.user.firstName || '',
+            lastName: t.driverProfile.user.lastName || '',
+          }
+        } : undefined,
+        fareQuote: t?.fareQuote ? {
+          totalFare: Number(t.fareQuote.totalFare || 0)
+        } : undefined,
+        payment: t?.payment ? {
+          status: t.payment.status || 'UNKNOWN'
+        } : undefined,
+        createdAt: t?.createdAt || new Date().toISOString(),
+      }));
+      setTrips(safeItems);
+      setTotalCount(normalized.total);
     } catch (err: any) {
       setError(err.message || 'Failed to load trips');
     } finally {

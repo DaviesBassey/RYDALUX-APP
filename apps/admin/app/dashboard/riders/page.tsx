@@ -131,17 +131,16 @@ export default function RidersPage() {
         <select value={kycStatus} onChange={(e) => setKycStatus(e.target.value)} className="input-field w-48">
           <option value="">All KYC Status</option>
           <option value="PENDING">Pending</option>
+          <option value="SUBMITTED">Submitted</option>
           <option value="APPROVED">Approved</option>
           <option value="REJECTED">Rejected</option>
-          <option value="EXPIRED">Expired</option>
+          <option value="SUSPENDED">Suspended</option>
         </select>
 
         <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-field w-48">
           <option value="">All Statuses</option>
           <option value="ACTIVE">Active</option>
           <option value="INACTIVE">Inactive</option>
-          <option value="SUSPENDED">Suspended</option>
-          <option value="BANNED">Banned</option>
         </select>
       </div>
 

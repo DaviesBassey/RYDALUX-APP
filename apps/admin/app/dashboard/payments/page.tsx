@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, normalizeListResponse } from '@/lib/api';
 import { DataTable, DataTableColumn } from '@/lib/components/DataTable';
 import { StatusBadge } from '@/lib/components/StatusBadge';
 import { PageHeader } from '@/lib/components/PageHeader';
@@ -69,8 +69,24 @@ export default function PaymentsPage() {
     setError('');
     try {
       const res = await api.getPayments(status || undefined, provider || undefined, pageSize, currentPage * pageSize);
-      setPayments(res.items || []);
-      setTotalCount(res.total || 0);
+      const normalized = normalizeListResponse<Payment>(res);
+      const safeItems = normalized.items.map((p: any, idx: number) => ({
+        id: p?.id || `payment-row-${idx}`,
+        reference: p?.reference || '—',
+        amount: p?.amount || 0,
+        currency: p?.currency || 'NGN',
+        status: p?.status || 'PENDING',
+        provider: p?.provider || 'unknown',
+        trip: p?.trip ? { reference: p?.trip?.reference || '—' } : undefined,
+        user: {
+          email: p?.user?.email || '',
+          firstName: p?.user?.firstName || '',
+          lastName: p?.user?.lastName || '',
+        },
+        createdAt: p?.createdAt || new Date().toISOString(),
+      }));
+      setPayments(safeItems);
+      setTotalCount(normalized.total);
     } catch (err: any) {
       setError(err.message || 'Failed to load payments');
     } finally {

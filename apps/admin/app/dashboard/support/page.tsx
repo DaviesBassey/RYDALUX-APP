@@ -111,8 +111,27 @@ export default function SupportPage() {
         pageSize,
         currentPage * pageSize
       );
-      const normalized = normalizeListResponse<SupportTicket>(res);
-      setTickets(normalized.items);
+      const normalized = normalizeListResponse<any>(res);
+      const safeItems = normalized.items.map((t: any, idx: number) => ({
+        id: t?.id || `ticket-row-${idx}`,
+        title: t?.title || '—',
+        type: t?.type || 'OTHER',
+        status: t?.status || 'OPEN',
+        priority: t?.priority || 'MEDIUM',
+        createdBy: {
+          firstName: t?.createdBy?.firstName || '',
+          lastName: t?.createdBy?.lastName || '',
+          email: t?.createdBy?.email || '',
+        },
+        assignedTo: t?.assignedTo ? {
+          firstName: t.assignedTo.firstName || t.assignedTo.user?.firstName || '',
+          lastName: t.assignedTo.lastName || t.assignedTo.user?.lastName || '',
+          email: t.assignedTo.email || t.assignedTo.user?.email || '',
+        } : undefined,
+        createdAt: t?.createdAt || new Date().toISOString(),
+        updatedAt: t?.updatedAt || new Date().toISOString(),
+      }));
+      setTickets(safeItems);
       setTotalCount(normalized.total);
     } catch (err: any) {
       setError(err.message || 'Failed to load support tickets');

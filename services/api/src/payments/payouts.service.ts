@@ -526,7 +526,11 @@ export class PayoutsService {
   }
 
   async getPayoutRequests(status?: string, limit = 20, offset = 0): Promise<any> {
-    const where = status ? { status: status as any } : {};
+    const allowedStatuses = ['REQUESTED', 'APPROVED', 'PROCESSING', 'PAID', 'FAILED', 'REJECTED', 'CANCELLED'];
+    if (status && !allowedStatuses.includes(status.toUpperCase())) {
+      throw new BadRequestException(`Invalid payout status: ${status}`);
+    }
+    const where = status ? { status: status.toUpperCase() as any } : {};
 
     const [payouts, total] = await Promise.all([
       this.prisma.payout.findMany({

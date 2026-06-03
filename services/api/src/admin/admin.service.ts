@@ -225,8 +225,29 @@ export class AdminService {
     return { items, total, limit, offset };
   }
 
-  async getAuditLogs() {
-    return this.prisma.auditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 100 });
+  async getAuditLogs(filters?: { actor?: string; entity?: string; action?: string; limit?: number; offset?: number }) {
+    const where: any = {};
+    if (filters?.actor) {
+      where.actorId = filters.actor;
+    }
+    if (filters?.entity) {
+      where.entity = filters.entity;
+    }
+    if (filters?.action) {
+      where.action = { contains: filters.action };
+    }
+    const limit = filters?.limit ?? 50;
+    const offset = filters?.offset ?? 0;
+    const [items, total] = await Promise.all([
+      this.prisma.auditLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: offset,
+        take: limit,
+      }),
+      this.prisma.auditLog.count({ where }),
+    ]);
+    return { items, total, limit, offset };
   }
 
   async listSosEvents(limit = 20, offset = 0) {

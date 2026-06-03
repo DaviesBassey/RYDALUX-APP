@@ -71,8 +71,33 @@ export default function PayoutsPage() {
     setError('');
     try {
       const res = await api.getPayouts(status || undefined, pageSize, currentPage * pageSize);
-      const normalized = normalizeListResponse<Payout>(res);
-      setPayouts(normalized.items);
+      const normalized = normalizeListResponse<any>(res);
+      const safeItems = normalized.items.map((p: any, idx: number) => ({
+        id: p?.id || `payout-row-${idx}`,
+        reference: p?.reference || '—',
+        amount: p?.amount || 0,
+        currency: p?.currency || 'NGN',
+        status: p?.status || 'PENDING',
+        paymentMethod: p?.paymentMethod || p?.provider || 'Bank Transfer',
+        createdAt: p?.createdAt || new Date().toISOString(),
+        processedAt: p?.processedAt || undefined,
+        driver: {
+          name: p?.driver?.name || `${p?.driverProfile?.user?.firstName || ''} ${p?.driverProfile?.user?.lastName || ''}`.trim() || p?.driver?.email || '—',
+          email: p?.driver?.email || p?.driverProfile?.user?.email || '',
+        },
+        driverProfile: p?.driverProfile ? {
+          user: {
+            firstName: p.driverProfile.user?.firstName || '',
+            lastName: p.driverProfile.user?.lastName || '',
+          }
+        } : {
+          user: {
+            firstName: p?.driver?.name?.split(' ')[0] || '',
+            lastName: p?.driver?.name?.split(' ')[1] || '',
+          }
+        },
+      }));
+      setPayouts(safeItems);
       setTotalCount(normalized.total);
     } catch (err: any) {
       setError(err.message || 'Failed to load payouts');
