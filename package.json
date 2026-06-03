@@ -24,7 +24,8 @@
     "start:mobile": "pnpm --filter @rydulux/mobile start",
     "build:staging": "turbo run build",
     "db:migrate:staging": "pnpm --filter @rydulux/prisma migrate:deploy",
-    "healthcheck:staging": "curl -f http://localhost:4000/health/ready"
+    "healthcheck:staging": "curl -f http://localhost:4000/health/ready",
+    "outbox:process": "pnpm --filter @rydulux/api-services-local run outbox:process"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

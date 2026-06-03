@@ -1,8 +1,9 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentsService, decimalToMinorUnits, minorUnitsToDecimal } from './payments.service';
 import { LedgerService } from './ledger.service';
+import { OutboxService } from '../outbox/outbox.service';
 
 export type FinancialTx = Prisma.TransactionClient;
 
@@ -37,6 +38,7 @@ export class PayoutsService {
     private readonly prisma: PrismaService,
     private readonly paymentsService: PaymentsService,
     private readonly ledgerService: LedgerService,
+    @Optional() private readonly outboxService?: OutboxService,
   ) {}
 
   async addPayoutAccount(
@@ -299,6 +301,18 @@ export class PayoutsService {
       },
     });
 
+    await this.outboxService?.enqueue(tx, {
+      aggregateType: 'PAYOUT',
+      aggregateId: payoutId,
+      eventType: 'payout.approved',
+      payload: {
+        amount: updatedPayout.amount,
+        currency: updatedPayout.currency,
+        status: updatedPayout.status,
+        driverProfileId: updatedPayout.driverProfileId,
+      },
+    });
+
     return updatedPayout;
   }
 
@@ -347,6 +361,19 @@ export class PayoutsService {
           amount: payout.amount,
           reason,
         } as any,
+      },
+    });
+
+    await this.outboxService?.enqueue(tx, {
+      aggregateType: 'PAYOUT',
+      aggregateId: payoutId,
+      eventType: 'payout.rejected',
+      payload: {
+        amount: updatedPayout.amount,
+        currency: updatedPayout.currency,
+        status: updatedPayout.status,
+        driverProfileId: updatedPayout.driverProfileId,
+        reason,
       },
     });
 

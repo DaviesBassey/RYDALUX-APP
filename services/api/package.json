@@ -11,6 +11,7 @@
     "test:e2e": "jest --config jest-e2e.json",
     "test:all": "jest && npm run test:integration && npm run test:e2e",
     "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\" --fix",
+    "outbox:process": "OUTBOX_SCHEDULER_DISABLED=true ts-node src/outbox/process-outbox.ts",
     "seed:admin": "ts-node prisma/seed.ts",
     "seed:staging": "ts-node prisma/seed-staging.ts",
     "seed:ops:staging": "ts-node prisma/seed-operations-staging.ts"
