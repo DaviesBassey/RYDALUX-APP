@@ -2,6 +2,14 @@ import { Body, Controller, Get, Headers, Param, Patch, Post, Query, Req, UseGuar
 import { Request } from 'express';
 import { AdminService } from './admin.service';
 import { PaymentsService } from '../payments/payments.service';
+import {
+  UserDto,
+  RiderDto,
+  TripDto,
+  PayoutDto,
+  LedgerAccountDto,
+  LedgerTransactionDto,
+} from './dto/admin-response.dto';
 import { PaystackService } from '../payments/paystack.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AdminOnlyGuard } from '../auth/admin-only.guard';
@@ -512,7 +520,7 @@ export class AdminController {
     @Query('status') status?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
-  ) {
+  ): Promise<{ items: UserDto[]; total: number; limit: number; offset: number }> {
     const where: any = {};
     const allowedTypes = ['RIDER', 'DRIVER', 'ADMIN'];
     const allowedStatuses = ['ACTIVE', 'INACTIVE'];
@@ -559,7 +567,10 @@ export class AdminController {
   }
 
   @Get('riders')
-  async listRiders(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+  async listRiders(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ): Promise<{ items: RiderDto[]; total: number; limit: number; offset: number }> {
     const [items, total] = await Promise.all([
       this.prisma.riderProfile.findMany({
         where: { deletedAt: null },
@@ -572,11 +583,31 @@ export class AdminController {
       }),
       this.prisma.riderProfile.count({ where: { deletedAt: null } }),
     ]);
-    return { items, total, limit: Number(limit) || 20, offset: Number(offset) || 0 };
+    return {
+      items: items.map((r) => ({
+        id: r.id,
+        userId: r.userId,
+        email: r.user?.email || '',
+        firstName: r.user?.firstName || '',
+        lastName: r.user?.lastName || '',
+        phone: r.user?.phone || '',
+        displayName: r.user?.displayName || '',
+        isActive: r.isActive,
+        createdAt: r.createdAt ? r.createdAt.toISOString() : '',
+        updatedAt: r.updatedAt ? r.updatedAt.toISOString() : '',
+      })),
+      total,
+      limit: Number(limit) || 20,
+      offset: Number(offset) || 0,
+    };
   }
 
   @Get('trips')
-  async listTrips(@Query('status') status?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+  async listTrips(
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ): Promise<{ items: TripDto[]; total: number; limit: number; offset: number }> {
     const where: any = {};
     const allowedStatuses = ['DRAFT', 'QUOTED', 'REQUESTED', 'DRIVER_ASSIGNED', 'DRIVER_ARRIVING', 'DRIVER_ARRIVED', 'PIN_VERIFIED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED_BY_RIDER', 'CANCELLED_BY_DRIVER', 'EXPIRED', 'DISPUTED'];
     if (status) {
@@ -594,7 +625,9 @@ export class AdminController {
           },
           driverProfile: {
             include: { user: { select: { id: true, email: true, firstName: true, lastName: true, displayName: true } } }
-          }
+          },
+          fareQuote: { select: { totalFare: true } },
+          payment: { select: { status: true } },
         },
         orderBy: { createdAt: 'desc' },
         skip: Number(offset) || 0,
@@ -602,12 +635,77 @@ export class AdminController {
       }),
       this.prisma.trip.count({ where }),
     ]);
-    return { items, total, limit: Number(limit) || 20, offset: Number(offset) || 0 };
+    return {
+      items: items.map((t) => ({
+        id: t.id,
+        reference: t.reference,
+        status: t.status,
+        pickupAddress: t.pickupAddress,
+        dropoffAddress: t.dropoffAddress,
+        pickupLatitude: t.pickupLatitude,
+        pickupLongitude: t.pickupLongitude,
+        dropoffLatitude: t.dropoffLatitude,
+        dropoffLongitude: t.dropoffLongitude,
+        scheduledAt: t.scheduledAt ? t.scheduledAt.toISOString() : null,
+        acceptedAt: t.acceptedAt ? t.acceptedAt.toISOString() : null,
+        startedAt: t.startedAt ? t.startedAt.toISOString() : null,
+        arrivedAt: t.arrivedAt ? t.arrivedAt.toISOString() : null,
+        completedAt: t.completedAt ? t.completedAt.toISOString() : null,
+        cancelledAt: t.cancelledAt ? t.cancelledAt.toISOString() : null,
+        cancellationReason: t.cancellationReason,
+        distanceMeters: t.distanceMeters,
+        durationSeconds: t.durationSeconds,
+        notes: t.notes,
+        createdAt: t.createdAt ? t.createdAt.toISOString() : '',
+        updatedAt: t.updatedAt ? t.updatedAt.toISOString() : '',
+        riderProfile: {
+          id: t.riderProfile.id,
+          userId: t.riderProfile.userId,
+          user: {
+            id: t.riderProfile.user?.id || '',
+            email: t.riderProfile.user?.email || '',
+            firstName: t.riderProfile.user?.firstName || '',
+            lastName: t.riderProfile.user?.lastName || '',
+            displayName: t.riderProfile.user?.displayName || '',
+          },
+        },
+        driverProfile: t.driverProfile
+          ? {
+              id: t.driverProfile.id,
+              userId: t.driverProfile.userId,
+              user: {
+                id: t.driverProfile.user?.id || '',
+                email: t.driverProfile.user?.email || '',
+                firstName: t.driverProfile.user?.firstName || '',
+                lastName: t.driverProfile.user?.lastName || '',
+                displayName: t.driverProfile.user?.displayName || '',
+              },
+            }
+          : null,
+        fareQuote: t.fareQuote
+          ? {
+              totalFare: Number(t.fareQuote.totalFare),
+            }
+          : null,
+        payment: t.payment
+          ? {
+              status: t.payment.status,
+            }
+          : null,
+      })),
+      total,
+      limit: Number(limit) || 20,
+      offset: Number(offset) || 0,
+    };
   }
 
   @Get('payouts')
   @Permissions('FINANCE_MANAGER')
-  async listPayouts(@Query('status') status?: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+  async listPayouts(
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ): Promise<{ items: PayoutDto[]; total: number; limit: number; offset: number }> {
     const where: any = {};
     const allowedStatuses = ['REQUESTED', 'APPROVED', 'PROCESSING', 'PAID', 'FAILED', 'REJECTED', 'CANCELLED'];
     if (status) {
@@ -640,7 +738,9 @@ export class AdminController {
         currency: p.currency,
         status: p.status,
         provider: p.provider,
-        createdAt: p.createdAt ? p.createdAt.toISOString() : null,
+        providerReference: p.providerReference || null,
+        createdAt: p.createdAt ? p.createdAt.toISOString() : '',
+        processedAt: p.processedAt ? p.processedAt.toISOString() : null,
         driver: p.driverProfile?.user
           ? {
               id: p.driverProfile.user.id,
@@ -658,10 +758,20 @@ export class AdminController {
 
   @Get('ledger/accounts')
   @Permissions('FINANCE_MANAGER')
-  async listLedgerAccounts() {
-    const items = await this.prisma.ledgerAccount.findMany({
-      orderBy: { code: 'asc' },
-    });
+  async listLedgerAccounts(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ): Promise<{ items: LedgerAccountDto[]; total: number; limit: number; offset: number }> {
+    const skip = Number(offset) || 0;
+    const take = Number(limit) || 100;
+    const [items, total] = await Promise.all([
+      this.prisma.ledgerAccount.findMany({
+        orderBy: { code: 'asc' },
+        skip,
+        take,
+      }),
+      this.prisma.ledgerAccount.count(),
+    ]);
     return {
       items: items.map((a) => ({
         id: a.id,
@@ -671,13 +781,18 @@ export class AdminController {
         balance: a.balance ? Number(a.balance) : 0,
         currency: a.currency || 'NGN',
       })),
-      total: items.length,
+      total,
+      limit: take,
+      offset: skip,
     };
   }
 
   @Get('ledger/transactions')
   @Permissions('FINANCE_MANAGER')
-  async listLedgerTransactions(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+  async listLedgerTransactions(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ): Promise<{ items: LedgerTransactionDto[]; total: number; limit: number; offset: number }> {
     const [items, total] = await Promise.all([
       this.prisma.financialTransaction.findMany({
         include: {
@@ -702,7 +817,7 @@ export class AdminController {
           accountCode: firstEntry?.ledgerAccount?.code || '—',
           amount: ft.amount ? Number(ft.amount) : 0,
           type: firstEntry?.transactionType || 'UNKNOWN',
-          createdAt: ft.createdAt ? ft.createdAt.toISOString() : null,
+          createdAt: ft.createdAt ? ft.createdAt.toISOString() : '',
           description: firstEntry?.description || ft.eventType || '',
         };
       }),

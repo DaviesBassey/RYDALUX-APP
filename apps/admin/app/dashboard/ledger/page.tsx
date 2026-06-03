@@ -1,33 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api, normalizeListResponse } from '@/lib/api';
+import { api, normalizeListResponse, LedgerAccountItem, LedgerTransactionItem } from '@/lib/api';
 import { DataTable, DataTableColumn } from '@/lib/components/DataTable';
 import { PageHeader } from '@/lib/components/PageHeader';
 import { formatCurrency, formatDateTime } from '@/lib/utils/formats';
 
-interface LedgerTransaction {
-  id: string;
-  reference: string;
-  accountCode: string;
-  amount: number | string;
-  type: string;
-  createdAt: string;
-  description?: string;
-}
-
-interface LedgerAccount {
-  id: string;
-  code: string;
-  name: string;
-  accountType: string;
-  balance: number | string;
-  currency: string;
-}
-
 export default function LedgerPage() {
-  const [accounts, setAccounts] = useState<LedgerAccount[]>([]);
-  const [transactions, setTransactions] = useState<LedgerTransaction[]>([]);
+  const [accounts, setAccounts] = useState<LedgerAccountItem[]>([]);
+  const [transactions, setTransactions] = useState<LedgerTransactionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
@@ -35,7 +16,7 @@ export default function LedgerPage() {
 
   const pageSize = 25;
 
-  const accountColumns: DataTableColumn<LedgerAccount>[] = [
+  const accountColumns: DataTableColumn<LedgerAccountItem>[] = [
     { key: 'code', label: 'Account Code', render: (val) => val || '—' },
     { key: 'name', label: 'Account Name', render: (val) => val || '—' },
     {
@@ -46,11 +27,11 @@ export default function LedgerPage() {
     {
       key: 'balance',
       label: 'Balance',
-      render: (balance, row) => formatCurrency(balance || 0, (row as any).currency || 'NGN'),
+      render: (balance, row) => formatCurrency(balance || 0, row.currency || 'NGN'),
     },
   ];
 
-  const transactionColumns: DataTableColumn<LedgerTransaction>[] = [
+  const transactionColumns: DataTableColumn<LedgerTransactionItem>[] = [
     { key: 'reference', label: 'Reference', render: (val) => val || '—' },
     { key: 'accountCode', label: 'Account', render: (val) => val || '—' },
     {
@@ -85,8 +66,8 @@ export default function LedgerPage() {
         api.getLedgerAccounts(),
         api.getLedgerTransactions(pageSize, currentPage * pageSize),
       ]);
-      const normalizedAcc = normalizeListResponse<LedgerAccount>(accRes);
-      const normalizedTrans = normalizeListResponse<LedgerTransaction>(transRes);
+      const normalizedAcc = normalizeListResponse<LedgerAccountItem>(accRes);
+      const normalizedTrans = normalizeListResponse<LedgerTransactionItem>(transRes);
       setAccounts(normalizedAcc.items);
       setTransactions(normalizedTrans.items);
       setTotalCount(normalizedTrans.total);

@@ -18,7 +18,7 @@ describe('Admin Dashboard Query Hardening', () => {
   const mockFinanceSchedulerService: any = {};
   const mockShipmentsService: any = {};
   const mockPayoutsService: any = {
-    getPayoutRequests: jest.fn().mockResolvedValue({ payouts: [], total: 0 }),
+    getPayoutRequests: jest.fn().mockResolvedValue({ items: [], total: 0 }),
   };
   const mockPrismaService: any = {
     user: {

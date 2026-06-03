@@ -1,26 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api, normalizeListResponse } from '@/lib/api';
+import { api, normalizeListResponse, PaymentItem } from '@/lib/api';
 import { DataTable, DataTableColumn } from '@/lib/components/DataTable';
 import { StatusBadge } from '@/lib/components/StatusBadge';
 import { PageHeader } from '@/lib/components/PageHeader';
 import { formatCurrency, formatDate, formatTimeAgo } from '@/lib/utils/formats';
 
-interface Payment {
-  id: string;
-  reference: string;
-  amount: number | string;
-  currency: string;
-  status: string;
-  provider: string;
-  trip?: { reference: string };
-  user: { email: string; firstName: string; lastName: string };
-  createdAt: string;
-}
-
 export default function PaymentsPage() {
-  const [payments, setPayments] = useState<Payment[]>([]);
+  const [payments, setPayments] = useState<PaymentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
@@ -30,7 +18,7 @@ export default function PaymentsPage() {
 
   const pageSize = 20;
 
-  const columns: DataTableColumn<Payment>[] = [
+  const columns: DataTableColumn<PaymentItem>[] = [
     { key: 'reference', label: 'Reference', width: '130px' },
     {
       key: 'amount',
@@ -55,7 +43,7 @@ export default function PaymentsPage() {
     {
       key: 'user',
       label: 'User',
-      render: (user) => `${user?.firstName || ''} ${user?.lastName || ''}`,
+      render: (user) => user?.displayName || user?.email || 'Unknown',
     },
     {
       key: 'createdAt',
@@ -69,23 +57,8 @@ export default function PaymentsPage() {
     setError('');
     try {
       const res = await api.getPayments(status || undefined, provider || undefined, pageSize, currentPage * pageSize);
-      const normalized = normalizeListResponse<Payment>(res);
-      const safeItems = normalized.items.map((p: any, idx: number) => ({
-        id: p?.id || `payment-row-${idx}`,
-        reference: p?.reference || '—',
-        amount: p?.amount || 0,
-        currency: p?.currency || 'NGN',
-        status: p?.status || 'PENDING',
-        provider: p?.provider || 'unknown',
-        trip: p?.trip ? { reference: p?.trip?.reference || '—' } : undefined,
-        user: {
-          email: p?.user?.email || '',
-          firstName: p?.user?.firstName || '',
-          lastName: p?.user?.lastName || '',
-        },
-        createdAt: p?.createdAt || new Date().toISOString(),
-      }));
-      setPayments(safeItems);
+      const normalized = normalizeListResponse<PaymentItem>(res);
+      setPayments(normalized.items);
       setTotalCount(normalized.total);
     } catch (err: any) {
       setError(err.message || 'Failed to load payments');

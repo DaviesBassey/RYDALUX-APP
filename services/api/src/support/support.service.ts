@@ -219,8 +219,8 @@ export class SupportService {
             type: t.type || 'OTHER',
             status: t.status || 'OPEN',
             priority: t.priority || 'MEDIUM',
-            createdAt: t.createdAt ? t.createdAt.toISOString() : null,
-            updatedAt: t.updatedAt ? t.updatedAt.toISOString() : null,
+            createdAt: t.createdAt ? t.createdAt.toISOString() : '',
+            updatedAt: t.updatedAt ? t.updatedAt.toISOString() : '',
             createdBy: mappedCreatedBy,
             assignedTo: mappedAssignedTo,
           };

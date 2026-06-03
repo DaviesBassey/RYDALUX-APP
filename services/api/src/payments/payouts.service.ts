@@ -544,17 +544,17 @@ export class PayoutsService {
     ]);
 
     return {
-      payouts: payouts.map((p) => ({
+      items: payouts.map((p) => ({
         id: p.id,
         driverId: p.driverProfile.userId,
         driverName: p.driverProfile.user ? `${p.driverProfile.user.firstName || ''} ${p.driverProfile.user.lastName || ''}`.trim() : 'Unknown',
-        amount: p.amount.toString(),
+        amount: Number(p.amount),
         currency: p.currency,
         status: p.status,
-        requestedAt: p.requestedAt,
-        approvedAt: p.approvedAt,
-        rejectedAt: p.rejectedAt,
-        rejectionReason: p.rejectionReason,
+        requestedAt: p.requestedAt ? p.requestedAt.toISOString() : '',
+        approvedAt: p.approvedAt ? p.approvedAt.toISOString() : null,
+        rejectedAt: p.rejectedAt ? p.rejectedAt.toISOString() : null,
+        rejectionReason: p.rejectionReason || null,
       })),
       total,
       limit,

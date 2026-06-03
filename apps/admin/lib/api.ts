@@ -34,9 +34,9 @@ export interface KycItem {
   user: {
     id: string;
     email: string;
-    firstName: string | null;
-    lastName: string | null;
-    phone: string | null;
+    firstName: string;
+    lastName: string;
+    phone: string;
   };
 }
 
@@ -61,9 +61,9 @@ export interface DriverDocumentItem {
   user: {
     id: string;
     email: string;
-    firstName: string | null;
-    lastName: string | null;
-    phone: string | null;
+    firstName: string;
+    lastName: string;
+    phone: string;
   };
 }
 
@@ -121,9 +121,9 @@ export interface VehicleItem {
     user: {
       id: string;
       email: string;
-      firstName: string | null;
-      lastName: string | null;
-      phone: string | null;
+      firstName: string;
+      lastName: string;
+      phone: string;
     };
   };
 }
@@ -183,6 +183,176 @@ export interface IncidentsResponse {
   total: number;
   limit: number;
   offset: number;
+}
+
+export interface UserItem {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  role: string;
+  status: string;
+  createdAt: string | null;
+  lastLogin: string | null;
+}
+
+export interface RiderItem {
+  id: string;
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  displayName: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TripItem {
+  id: string;
+  reference: string;
+  status: string;
+  pickupAddress: string;
+  dropoffAddress: string;
+  pickupLatitude: number;
+  pickupLongitude: number;
+  dropoffLatitude: number;
+  dropoffLongitude: number;
+  scheduledAt: string | null;
+  acceptedAt: string | null;
+  startedAt: string | null;
+  arrivedAt: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  cancellationReason: string | null;
+  distanceMeters: number | null;
+  durationSeconds: number | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  riderProfile: {
+    id: string;
+    userId: string;
+    user: {
+      id: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+      displayName: string;
+    };
+  };
+  driverProfile: {
+    id: string;
+    userId: string;
+    user: {
+      id: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+      displayName: string;
+    };
+  } | null;
+  fareQuote: {
+    totalFare: number;
+  } | null;
+  payment: {
+    status: string;
+  } | null;
+}
+
+export interface PaymentItem {
+  id: string;
+  tripId: string | null;
+  amount: number;
+  currency: string;
+  status: string;
+  reference: string;
+  provider: string;
+  createdAt: string;
+  user: {
+    id: string;
+    displayName: string | null;
+    phone: string | null;
+    email: string;
+  } | null;
+  trip: {
+    id: string;
+    reference: string;
+    status: string;
+  } | null;
+}
+
+export interface PayoutItem {
+  id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  provider: string;
+  providerReference: string | null;
+  createdAt: string;
+  processedAt: string | null;
+  driver: {
+    id: string;
+    name: string;
+    phone: string;
+    email: string;
+  } | null;
+}
+
+export interface PayoutRequestItem {
+  id: string;
+  driverId: string;
+  driverName: string;
+  amount: number;
+  currency: string;
+  status: string;
+  requestedAt: string;
+  approvedAt: string | null;
+  rejectedAt: string | null;
+  rejectionReason: string | null;
+}
+
+export interface LedgerAccountItem {
+  id: string;
+  code: string;
+  name: string;
+  accountType: string;
+  balance: number;
+  currency: string;
+}
+
+export interface LedgerTransactionItem {
+  id: string;
+  reference: string;
+  accountCode: string;
+  amount: number;
+  type: string;
+  createdAt: string;
+  description: string;
+}
+
+export interface SupportTicketItem {
+  id: string;
+  title: string;
+  type: string;
+  status: string;
+  priority: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null;
+  assignedTo: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null;
 }
 
 async function fetchJson<T>(path: string, options?: RequestInit): Promise<T> {

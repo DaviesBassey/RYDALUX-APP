@@ -171,7 +171,30 @@ export class AdminService {
       }),
       this.prisma.kycCheck.count({ where: { status: 'SUBMITTED' } })
     ]);
-    return { items, total, limit, offset };
+    return {
+      items: items.map((k) => ({
+        id: k.id,
+        userId: k.userId,
+        status: k.status,
+        provider: k.provider || null,
+        submittedAt: k.submittedAt ? k.submittedAt.toISOString() : '',
+        reviewedAt: k.reviewedAt ? k.reviewedAt.toISOString() : null,
+        reviewedById: k.reviewedById || null,
+        notes: k.notes || null,
+        createdAt: k.createdAt ? k.createdAt.toISOString() : '',
+        updatedAt: k.updatedAt ? k.updatedAt.toISOString() : '',
+        user: {
+          id: k.user?.id || '',
+          email: k.user?.email || '',
+          firstName: k.user?.firstName || '',
+          lastName: k.user?.lastName || '',
+          phone: k.user?.phone || '',
+        },
+      })),
+      total,
+      limit,
+      offset,
+    };
   }
 
   async getPendingDriverDocuments(limit = 20, offset = 0) {
@@ -198,8 +221,50 @@ export class AdminService {
       this.prisma.vehicleDocument.count({ where: { status: 'PENDING', deletedAt: null } })
     ]);
     return {
-      driverDocuments: { items: driverDocs, total: driverTotal },
-      vehicleDocuments: { items: vehicleDocs, total: vehicleTotal },
+      driverDocuments: {
+        items: driverDocs.map((d) => ({
+          id: d.id,
+          userId: d.userId,
+          documentType: d.documentType,
+          status: d.status,
+          documentUrl: d.documentUrl,
+          issuedAt: d.issuedAt ? d.issuedAt.toISOString() : null,
+          expiresAt: d.expiresAt ? d.expiresAt.toISOString() : null,
+          verifiedAt: d.verifiedAt ? d.verifiedAt.toISOString() : null,
+          createdAt: d.createdAt ? d.createdAt.toISOString() : '',
+          updatedAt: d.updatedAt ? d.updatedAt.toISOString() : '',
+          user: {
+            id: d.user?.id || '',
+            email: d.user?.email || '',
+            firstName: d.user?.firstName || '',
+            lastName: d.user?.lastName || '',
+            phone: d.user?.phone || '',
+          },
+        })),
+        total: driverTotal,
+      },
+      vehicleDocuments: {
+        items: vehicleDocs.map((v) => ({
+          id: v.id,
+          vehicleId: v.vehicleId,
+          documentType: v.documentType,
+          status: v.status,
+          documentUrl: v.documentUrl,
+          issuedAt: v.issuedAt ? v.issuedAt.toISOString() : null,
+          expiresAt: v.expiresAt ? v.expiresAt.toISOString() : null,
+          verifiedAt: v.verifiedAt ? v.verifiedAt.toISOString() : null,
+          createdAt: v.createdAt ? v.createdAt.toISOString() : '',
+          updatedAt: v.updatedAt ? v.updatedAt.toISOString() : '',
+          vehicle: {
+            id: v.vehicle?.id || '',
+            registrationNumber: v.vehicle?.registrationNumber || '',
+            make: v.vehicle?.make || '',
+            model: v.vehicle?.model || '',
+            driverProfileId: v.vehicle?.driverProfileId || '',
+          },
+        })),
+        total: vehicleTotal,
+      },
       limit,
       offset
     };
@@ -222,7 +287,38 @@ export class AdminService {
       }),
       this.prisma.vehicle.count({ where: { status: 'INACTIVE', deletedAt: null } })
     ]);
-    return { items, total, limit, offset };
+    return {
+      items: items.map((v) => ({
+        id: v.id,
+        driverProfileId: v.driverProfileId,
+        registrationNumber: v.registrationNumber,
+        make: v.make,
+        model: v.model,
+        year: v.year,
+        color: v.color,
+        capacity: v.capacity,
+        vehicleType: v.vehicleType,
+        status: v.status,
+        approvedAt: v.approvedAt ? v.approvedAt.toISOString() : null,
+        verifiedAt: v.verifiedAt ? v.verifiedAt.toISOString() : null,
+        createdAt: v.createdAt ? v.createdAt.toISOString() : '',
+        updatedAt: v.updatedAt ? v.updatedAt.toISOString() : '',
+        driverProfile: {
+          id: v.driverProfile.id,
+          userId: v.driverProfile.userId,
+          user: {
+            id: v.driverProfile.user?.id || '',
+            email: v.driverProfile.user?.email || '',
+            firstName: v.driverProfile.user?.firstName || '',
+            lastName: v.driverProfile.user?.lastName || '',
+            phone: v.driverProfile.user?.phone || '',
+          },
+        },
+      })),
+      total,
+      limit,
+      offset,
+    };
   }
 
   async getAuditLogs(filters?: { actor?: string; entity?: string; action?: string; limit?: number; offset?: number }) {
@@ -247,7 +343,20 @@ export class AdminService {
       }),
       this.prisma.auditLog.count({ where }),
     ]);
-    return { items, total, limit, offset };
+    return {
+      items: items.map((a) => ({
+        id: a.id,
+        actorId: a.actorId || null,
+        action: a.action,
+        entity: a.entity,
+        entityId: a.entityId,
+        payload: a.payload,
+        createdAt: a.createdAt ? a.createdAt.toISOString() : '',
+      })),
+      total,
+      limit,
+      offset,
+    };
   }
 
   async listSosEvents(limit = 20, offset = 0) {
@@ -272,11 +381,21 @@ export class AdminService {
         status: s.status,
         latitude: s.latitude,
         longitude: s.longitude,
-        notes: s.notes,
-        triggeredAt: s.triggeredAt,
-        resolvedAt: s.resolvedAt,
-        user: s.user,
-        trip: s.trip,
+        notes: s.notes || null,
+        triggeredAt: s.triggeredAt ? s.triggeredAt.toISOString() : '',
+        resolvedAt: s.resolvedAt ? s.resolvedAt.toISOString() : null,
+        user: {
+          id: s.user?.id || '',
+          displayName: s.user?.displayName || null,
+          phone: s.user?.phone || null,
+        },
+        trip: s.trip
+          ? {
+              id: s.trip.id,
+              reference: s.trip.reference,
+              status: s.trip.status,
+            }
+          : null,
       })),
       total,
       limit: page.limit,
@@ -306,11 +425,20 @@ export class AdminService {
         severity: i.severity,
         status: i.status,
         description: i.description,
-        resolvedAt: i.resolvedAt,
-        createdAt: i.createdAt,
-        updatedAt: i.updatedAt,
-        reportedBy: i.reportedBy,
-        trip: i.trip,
+        resolvedAt: i.resolvedAt ? i.resolvedAt.toISOString() : null,
+        createdAt: i.createdAt ? i.createdAt.toISOString() : '',
+        updatedAt: i.updatedAt ? i.updatedAt.toISOString() : '',
+        reportedBy: {
+          id: i.reportedBy?.id || '',
+          displayName: i.reportedBy?.displayName || null,
+        },
+        trip: i.trip
+          ? {
+              id: i.trip.id,
+              reference: i.trip.reference,
+              status: i.trip.status,
+            }
+          : null,
       })),
       total,
       limit: page.limit,
