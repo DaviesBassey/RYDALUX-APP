@@ -20,6 +20,7 @@ import { DevModule } from './dev/dev.module';
 import { IdempotencyModule } from './idempotency/idempotency.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { ShipmentsModule } from './shipments/shipments.module';
+import { OutboxModule } from './outbox/outbox.module';
 import configuration from './config/configuration';
 
 const devModules = process.env.NODE_ENV === 'development' ? [DevModule] : [];
@@ -42,6 +43,7 @@ const devModules = process.env.NODE_ENV === 'development' ? [DevModule] : [];
     AdminModule,
     SupportModule,
     ShipmentsModule,
+    OutboxModule,
     ...devModules,
   ],
   controllers: [AppController],
