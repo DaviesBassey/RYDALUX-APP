@@ -1,26 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api, normalizeListResponse } from '@/lib/api';
+import { api, normalizeListResponse, SupportTicketItem } from '@/lib/api';
 import { DataTable, DataTableColumn } from '@/lib/components/DataTable';
 import { StatusBadge } from '@/lib/components/StatusBadge';
 import { PageHeader } from '@/lib/components/PageHeader';
 import { formatDate, formatTimeAgo } from '@/lib/utils/formats';
 
-interface SupportTicket {
-  id: string;
-  title: string;
-  type: string;
-  status: string;
-  priority: string;
-  createdBy: { firstName: string; lastName: string; email: string };
-  assignedTo?: { user?: { firstName: string; lastName: string }; firstName?: string; lastName?: string; email?: string };
-  createdAt: string;
-  updatedAt: string;
-}
-
 export default function SupportPage() {
-  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [tickets, setTickets] = useState<SupportTicketItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
@@ -31,7 +19,7 @@ export default function SupportPage() {
 
   const pageSize = 20;
 
-  const columns: DataTableColumn<SupportTicket>[] = [
+  const columns: DataTableColumn<SupportTicketItem>[] = [
     { key: 'title', label: 'Title', width: '250px', render: (val) => val || '—' },
     {
       key: 'type',
@@ -111,7 +99,7 @@ export default function SupportPage() {
         pageSize,
         currentPage * pageSize
       );
-      const normalized = normalizeListResponse<SupportTicket>(res);
+      const normalized = normalizeListResponse<SupportTicketItem>(res);
       setTickets(normalized.items);
       setTotalCount(normalized.total);
     } catch (err: any) {

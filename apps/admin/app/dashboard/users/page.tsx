@@ -1,26 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api, normalizeListResponse } from '@/lib/api';
+import { api, normalizeListResponse, UserItem } from '@/lib/api';
 import { DataTable, DataTableColumn } from '@/lib/components/DataTable';
 import { StatusBadge } from '@/lib/components/StatusBadge';
 import { PageHeader } from '@/lib/components/PageHeader';
 import { formatDate, maskEmail, maskPhone } from '@/lib/utils/formats';
 
-interface User {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  phone: string;
-  role: string;
-  status: string;
-  createdAt: string;
-  lastLogin?: string;
-}
-
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [role, setRole] = useState('');
@@ -30,7 +18,7 @@ export default function UsersPage() {
 
   const pageSize = 20;
 
-  const columns: DataTableColumn<User>[] = [
+  const columns: DataTableColumn<UserItem>[] = [
     {
       key: 'firstName',
       label: 'Name',
@@ -75,20 +63,10 @@ export default function UsersPage() {
     setError('');
     try {
       const res = await api.getUsers(role || undefined, status || undefined, pageSize, currentPage * pageSize);
-      const normalized = normalizeListResponse<any>(res);
-      const safeItems = normalized.items.map((u: any, idx: number) => ({
-        id: u?.id || `user-row-${idx}`,
-        email: u?.email || '',
-        firstName: u?.firstName || '',
-        lastName: u?.lastName || '',
-        phone: u?.phone || '',
-        role: String(u?.role || u?.userType || 'UNKNOWN'),
-        status: String(u?.status || 'ACTIVE'),
-        createdAt: u?.createdAt || '',
-        lastLogin: u?.lastLogin || u?.lastLoginAt || '',
-      }));
+      const normalized = normalizeListResponse<UserItem>(res);
+      const safeItems = normalized.items;
 
-      const filteredItems = safeItems.filter((u: any) => {
+      const filteredItems = safeItems.filter((u) => {
         const matchesRole = !role || u.role === role;
         const matchesStatus = !status || u.status === status;
         return matchesRole && matchesStatus;

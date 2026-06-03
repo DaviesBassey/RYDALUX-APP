@@ -447,6 +447,7 @@ describe('PayoutsService - Section 17 Driver Payouts', () => {
           status: 'REQUESTED',
           amount: '5000.00',
           driverProfile: { userId: 'driver-1', user: { firstName: 'John', lastName: 'Doe' } },
+          requestedAt: new Date(),
         },
       ];
 
@@ -455,8 +456,8 @@ describe('PayoutsService - Section 17 Driver Payouts', () => {
 
       const result = await service.getPayoutRequests('REQUESTED', 20, 0);
 
-      expect(result.payouts).toHaveLength(1);
-      expect(result.payouts[0].driverName).toBe('John Doe');
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].driverName).toBe('John Doe');
     });
   });
 

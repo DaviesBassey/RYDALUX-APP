@@ -1,26 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api, normalizeListResponse } from '@/lib/api';
+import { api, normalizeListResponse, PayoutItem } from '@/lib/api';
 import { DataTable, DataTableColumn } from '@/lib/components/DataTable';
 import { StatusBadge } from '@/lib/components/StatusBadge';
 import { PageHeader } from '@/lib/components/PageHeader';
 import { formatCurrency, formatDate, formatTimeAgo } from '@/lib/utils/formats';
 
-interface Payout {
-  id: string;
-  reference: string;
-  driverProfile: { user: { firstName: string; lastName: string } };
-  amount: number | string;
-  currency: string;
-  status: string;
-  paymentMethod: string;
-  createdAt: string;
-  processedAt?: string;
-}
-
 export default function PayoutsPage() {
-  const [payouts, setPayouts] = useState<Payout[]>([]);
+  const [payouts, setPayouts] = useState<PayoutItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
@@ -29,23 +17,22 @@ export default function PayoutsPage() {
 
   const pageSize = 20;
 
-  const columns: DataTableColumn<Payout>[] = [
-    { key: 'reference', label: 'Reference', width: '120px', render: (val) => val || '—' },
+  const columns: DataTableColumn<PayoutItem>[] = [
+    { key: 'providerReference', label: 'Reference', width: '120px', render: (val) => val || '—' },
     {
-      key: 'driverProfile',
+      key: 'driver',
       label: 'Driver',
-      render: (profile, row) => {
-        const driverName = (row as any).driver?.name ?? `${profile?.user?.firstName || ''} ${profile?.user?.lastName || ''}`;
-        return driverName.trim() || (row as any).driver?.email || '—';
+      render: (driver) => {
+        return driver?.name || driver?.email || '—';
       },
     },
     {
       key: 'amount',
       label: 'Amount',
-      render: (amount, row) => formatCurrency(amount || 0, (row as any).currency || 'NGN'),
+      render: (amount, row) => formatCurrency(amount || 0, row.currency || 'NGN'),
     },
     {
-      key: 'paymentMethod',
+      key: 'provider',
       label: 'Method',
       render: (value) => value ? value.charAt(0).toUpperCase() + value.slice(1).toLowerCase() : '—',
     },
@@ -71,7 +58,7 @@ export default function PayoutsPage() {
     setError('');
     try {
       const res = await api.getPayouts(status || undefined, pageSize, currentPage * pageSize);
-      const normalized = normalizeListResponse<Payout>(res);
+      const normalized = normalizeListResponse<PayoutItem>(res);
       setPayouts(normalized.items);
       setTotalCount(normalized.total);
     } catch (err: any) {

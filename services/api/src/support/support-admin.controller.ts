@@ -9,6 +9,7 @@ import {
   Req,
   Logger,
   UnauthorizedException,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
@@ -41,9 +42,30 @@ export class SupportAdminController {
       if (!userId) throw new UnauthorizedException('Missing authenticated user id');
 
       const filter: any = {};
-      if (status) filter.status = status;
-      if (type) filter.type = type;
-      if (priority) filter.priority = priority;
+      const allowedStatuses = ['OPEN', 'IN_REVIEW', 'WAITING_ON_USER', 'WAITING_ON_ADMIN', 'ESCALATED', 'RESOLVED', 'CLOSED'];
+      if (status) {
+        if (!allowedStatuses.includes(status.toUpperCase())) {
+          throw new BadRequestException(`Invalid ticket status: ${status}`);
+        }
+        filter.status = status.toUpperCase();
+      }
+
+      const allowedTypes = ['PAYMENT_ISSUE', 'DRIVER_COMPLAINT', 'RIDER_COMPLAINT', 'LOST_ITEM', 'SAFETY_ISSUE', 'CANCELLATION_ISSUE', 'REFUND_REQUEST', 'PAYOUT_ISSUE', 'ACCOUNT_ISSUE', 'VEHICLE_ISSUE', 'SHIPMENT_ISSUE', 'OTHER'];
+      if (type) {
+        if (!allowedTypes.includes(type.toUpperCase())) {
+          throw new BadRequestException(`Invalid ticket type: ${type}`);
+        }
+        filter.type = type.toUpperCase();
+      }
+
+      const allowedPriorities = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
+      if (priority) {
+        if (!allowedPriorities.includes(priority.toUpperCase())) {
+          throw new BadRequestException(`Invalid ticket priority: ${priority}`);
+        }
+        filter.priority = priority.toUpperCase();
+      }
+
       if (assignedToId) filter.assignedToId = assignedToId;
 
       const parsedLimit = Number(limit) || 20;

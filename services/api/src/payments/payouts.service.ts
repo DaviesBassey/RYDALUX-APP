@@ -1,8 +1,9 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentsService, decimalToMinorUnits, minorUnitsToDecimal } from './payments.service';
 import { LedgerService } from './ledger.service';
+import { OutboxService } from '../outbox/outbox.service';
 
 export type FinancialTx = Prisma.TransactionClient;
 
@@ -37,6 +38,7 @@ export class PayoutsService {
     private readonly prisma: PrismaService,
     private readonly paymentsService: PaymentsService,
     private readonly ledgerService: LedgerService,
+    @Optional() private readonly outboxService?: OutboxService,
   ) {}
 
   async addPayoutAccount(
@@ -299,6 +301,18 @@ export class PayoutsService {
       },
     });
 
+    await this.outboxService?.enqueue(tx, {
+      aggregateType: 'PAYOUT',
+      aggregateId: payoutId,
+      eventType: 'payout.approved',
+      payload: {
+        amount: updatedPayout.amount,
+        currency: updatedPayout.currency,
+        status: updatedPayout.status,
+        driverProfileId: updatedPayout.driverProfileId,
+      },
+    });
+
     return updatedPayout;
   }
 
@@ -347,6 +361,19 @@ export class PayoutsService {
           amount: payout.amount,
           reason,
         } as any,
+      },
+    });
+
+    await this.outboxService?.enqueue(tx, {
+      aggregateType: 'PAYOUT',
+      aggregateId: payoutId,
+      eventType: 'payout.rejected',
+      payload: {
+        amount: updatedPayout.amount,
+        currency: updatedPayout.currency,
+        status: updatedPayout.status,
+        driverProfileId: updatedPayout.driverProfileId,
+        reason,
       },
     });
 
@@ -526,7 +553,11 @@ export class PayoutsService {
   }
 
   async getPayoutRequests(status?: string, limit = 20, offset = 0): Promise<any> {
-    const where = status ? { status: status as any } : {};
+    const allowedStatuses = ['REQUESTED', 'APPROVED', 'PROCESSING', 'PAID', 'FAILED', 'REJECTED', 'CANCELLED'];
+    if (status && !allowedStatuses.includes(status.toUpperCase())) {
+      throw new BadRequestException(`Invalid payout status: ${status}`);
+    }
+    const where = status ? { status: status.toUpperCase() as any } : {};
 
     const [payouts, total] = await Promise.all([
       this.prisma.payout.findMany({
@@ -540,17 +571,17 @@ export class PayoutsService {
     ]);
 
     return {
-      payouts: payouts.map((p) => ({
+      items: payouts.map((p) => ({
         id: p.id,
         driverId: p.driverProfile.userId,
         driverName: p.driverProfile.user ? `${p.driverProfile.user.firstName || ''} ${p.driverProfile.user.lastName || ''}`.trim() : 'Unknown',
-        amount: p.amount.toString(),
+        amount: Number(p.amount),
         currency: p.currency,
         status: p.status,
-        requestedAt: p.requestedAt,
-        approvedAt: p.approvedAt,
-        rejectedAt: p.rejectedAt,
-        rejectionReason: p.rejectionReason,
+        requestedAt: p.requestedAt ? p.requestedAt.toISOString() : '',
+        approvedAt: p.approvedAt ? p.approvedAt.toISOString() : null,
+        rejectedAt: p.rejectedAt ? p.rejectedAt.toISOString() : null,
+        rejectionReason: p.rejectionReason || null,
       })),
       total,
       limit,

@@ -4,8 +4,10 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { OutboxService } from '../outbox/outbox.service';
 import { SupportStatus, SupportTicketType, SupportTicketPriority } from '@prisma/client';
 import { CreateSupportTicketDto } from './dto/create-support-ticket.dto';
 import { AddTicketReplyDto } from './dto/add-ticket-reply.dto';
@@ -24,7 +26,18 @@ interface TicketFilter {
 @Injectable()
 export class SupportService {
   private readonly logger = new Logger(SupportService.name);
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional()
+    private outboxService?: OutboxService
+  ) {}
+
+  private async runTransaction<T>(callback: (tx: any) => Promise<T>): Promise<T> {
+    if (typeof this.prisma.$transaction === 'function') {
+      return this.prisma.$transaction(callback);
+    }
+    return callback(this.prisma);
+  }
 
   async createTicket(userId: string, dto: CreateSupportTicketDto) {
     const { tripId, paymentId, payoutId, sosEventId, incidentReportId, vehicleId } = dto;
@@ -219,8 +232,8 @@ export class SupportService {
             type: t.type || 'OTHER',
             status: t.status || 'OPEN',
             priority: t.priority || 'MEDIUM',
-            createdAt: t.createdAt ? t.createdAt.toISOString() : null,
-            updatedAt: t.updatedAt ? t.updatedAt.toISOString() : null,
+            createdAt: t.createdAt ? t.createdAt.toISOString() : '',
+            updatedAt: t.updatedAt ? t.updatedAt.toISOString() : '',
             createdBy: mappedCreatedBy,
             assignedTo: mappedAssignedTo,
           };
@@ -370,29 +383,45 @@ export class SupportService {
       updateData.closedAt = new Date();
     }
 
-    const updated = await this.prisma.supportTicket.update({
-      where: { id: ticketId },
-      data: updateData,
-      include: {
-        createdBy: {
-          select: { id: true, email: true, firstName: true, lastName: true },
+    const updated = await this.runTransaction(async (tx) => {
+      const up = await tx.supportTicket.update({
+        where: { id: ticketId },
+        data: updateData,
+        include: {
+          createdBy: {
+            select: { id: true, email: true, firstName: true, lastName: true },
+          },
         },
-      },
-    });
+      });
 
-    // Audit log
-    await this.prisma.auditLog.create({
-      data: {
-        actorId: adminId,
-        action: 'SUPPORT_TICKET_STATUS_CHANGED',
-        entity: 'SUPPORT_TICKET',
-        entityId: ticketId,
+      // Audit log
+      await tx.auditLog.create({
+        data: {
+          actorId: adminId,
+          action: 'SUPPORT_TICKET_STATUS_CHANGED',
+          entity: 'SUPPORT_TICKET',
+          entityId: ticketId,
+          payload: {
+            previousStatus: ticket.status,
+            newStatus: dto.status,
+            notes: dto.notes,
+          },
+        },
+      });
+
+      await this.outboxService?.enqueue(tx, {
+        aggregateType: 'SUPPORT_TICKET',
+        aggregateId: ticketId,
+        eventType: 'support.updated',
         payload: {
+          action: 'STATUS_CHANGED',
           previousStatus: ticket.status,
           newStatus: dto.status,
           notes: dto.notes,
         },
-      },
+      });
+
+      return up;
     });
 
     return updated;
@@ -416,24 +445,40 @@ export class SupportService {
       throw new ForbiddenException('Only admin users can change ticket priority');
     }
 
-    const updated = await this.prisma.supportTicket.update({
-      where: { id: ticketId },
-      data: { priority: dto.priority },
-    });
+    const updated = await this.runTransaction(async (tx) => {
+      const up = await tx.supportTicket.update({
+        where: { id: ticketId },
+        data: { priority: dto.priority },
+      });
 
-    // Audit log
-    await this.prisma.auditLog.create({
-      data: {
-        actorId: adminId,
-        action: 'SUPPORT_TICKET_PRIORITY_CHANGED',
-        entity: 'SUPPORT_TICKET',
-        entityId: ticketId,
+      // Audit log
+      await tx.auditLog.create({
+        data: {
+          actorId: adminId,
+          action: 'SUPPORT_TICKET_PRIORITY_CHANGED',
+          entity: 'SUPPORT_TICKET',
+          entityId: ticketId,
+          payload: {
+            previousPriority: ticket.priority,
+            newPriority: dto.priority,
+            reason: dto.reason,
+          },
+        },
+      });
+
+      await this.outboxService?.enqueue(tx, {
+        aggregateType: 'SUPPORT_TICKET',
+        aggregateId: ticketId,
+        eventType: 'support.updated',
         payload: {
+          action: 'PRIORITY_CHANGED',
           previousPriority: ticket.priority,
           newPriority: dto.priority,
           reason: dto.reason,
         },
-      },
+      });
+
+      return up;
     });
 
     return updated;

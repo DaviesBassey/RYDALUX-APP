@@ -1,23 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, normalizeListResponse, AuditLogItem } from '@/lib/api';
 import { DataTable, DataTableColumn } from '@/lib/components/DataTable';
 import { PageHeader } from '@/lib/components/PageHeader';
 import { formatDateTime, truncateText } from '@/lib/utils/formats';
 
-interface AuditLog {
-  id: string;
-  actorId: string | null;
-  action: string;
-  entity: string;
-  entityId: string;
-  payload: any;
-  createdAt: string;
-}
-
 export default function AuditLogsPage() {
-  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [logs, setLogs] = useState<AuditLogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [action, setAction] = useState('');
@@ -27,7 +17,7 @@ export default function AuditLogsPage() {
 
   const pageSize = 50;
 
-  const columns: DataTableColumn<AuditLog>[] = [
+  const columns: DataTableColumn<AuditLogItem>[] = [
     {
       key: 'createdAt',
       label: 'Timestamp',
@@ -80,8 +70,9 @@ export default function AuditLogsPage() {
     setError('');
     try {
       const res = await api.getAuditLogs(undefined, entity || undefined, action || undefined, pageSize, currentPage * pageSize);
-      setLogs(Array.isArray(res) ? res : res.items || []);
-      setTotalCount(Array.isArray(res) ? res.length : res.total || 0);
+      const normalized = normalizeListResponse<AuditLogItem>(res);
+      setLogs(normalized.items);
+      setTotalCount(normalized.total);
     } catch (err: any) {
       setError(err.message || 'Failed to load audit logs');
     } finally {

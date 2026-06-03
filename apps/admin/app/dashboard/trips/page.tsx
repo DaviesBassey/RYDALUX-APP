@@ -1,27 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, normalizeListResponse, TripItem } from '@/lib/api';
 import { DataTable, DataTableColumn } from '@/lib/components/DataTable';
 import { StatusBadge } from '@/lib/components/StatusBadge';
 import { PageHeader } from '@/lib/components/PageHeader';
 import { formatDate, formatCurrency, formatTimeAgo } from '@/lib/utils/formats';
 
-interface Trip {
-  id: string;
-  reference: string;
-  status: string;
-  pickupAddress: string;
-  dropoffAddress: string;
-  riderProfile: { user: { firstName: string; lastName: string; email: string } };
-  driverProfile?: { user: { firstName: string; lastName: string } };
-  fareQuote?: { totalFare: number };
-  payment?: { status: string };
-  createdAt: string;
-}
-
 export default function TripsPage() {
-  const [trips, setTrips] = useState<Trip[]>([]);
+  const [trips, setTrips] = useState<TripItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
@@ -30,7 +17,7 @@ export default function TripsPage() {
 
   const pageSize = 20;
 
-  const columns: DataTableColumn<Trip>[] = [
+  const columns: DataTableColumn<TripItem>[] = [
     { key: 'reference', label: 'Trip ID', width: '100px' },
     {
       key: 'status',
@@ -79,8 +66,9 @@ export default function TripsPage() {
     setError('');
     try {
       const res = await api.getTrips(status || undefined, pageSize, currentPage * pageSize);
-      setTrips(res.items || []);
-      setTotalCount(res.total || 0);
+      const normalized = normalizeListResponse<TripItem>(res);
+      setTrips(normalized.items);
+      setTotalCount(normalized.total);
     } catch (err: any) {
       setError(err.message || 'Failed to load trips');
     } finally {
