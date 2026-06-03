@@ -1500,3 +1500,21 @@ model SafetyCheckIn {
   @@index([tripId, createdAt])
   @@index([userId, createdAt])
 }
+
+model OutboxEvent {
+  id            String    @id @default(uuid()) @db.Uuid
+  aggregateType String
+  aggregateId   String
+  eventType     String
+  payload       Json
+  status        String    @default("PENDING")
+  attemptCount  Int       @default(0)
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  publishedAt   DateTime?
+  nextAttemptAt DateTime?
+
+  @@index([status, nextAttemptAt])
+  @@index([aggregateType, aggregateId])
+  @@index([eventType, createdAt])
+}

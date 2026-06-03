@@ -1,8 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReviewDriverDocumentDto } from '../drivers/dto/review-driver-document.dto';
 import { ReviewVehicleDto } from './dto/review-vehicle.dto';
 import { PaystackService } from '../payments/paystack.service';
+import { OutboxService } from '../outbox/outbox.service';
 
 const INCIDENT_SEVERITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 const INCIDENT_STATUSES = ['OPEN', 'INVESTIGATING', 'RESOLVED', 'CLOSED'];
@@ -18,6 +19,7 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paystackService: PaystackService,
+    @Optional() private readonly outboxService?: OutboxService,
   ) {}
 
   async approveKyc(reviewerId: string, userId: string, comment?: string) {
@@ -451,12 +453,33 @@ export class AdminService {
     if (!sos) throw new NotFoundException('SOS event not found.');
     if (sos.status === 'RESOLVED') throw new BadRequestException('SOS event is already resolved.');
 
-    await this.prisma.sosEvent.update({
-      where: { id: sosEventId },
-      data: { status: 'RESOLVED', resolvedAt: new Date(), notes: notes ?? sos.notes },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.sosEvent.update({
+        where: { id: sosEventId },
+        data: { status: 'RESOLVED', resolvedAt: new Date(), notes: notes ?? sos.notes },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: adminId,
+          action: 'SOS_RESOLVED',
+          entity: 'ADMIN',
+          entityId: sosEventId,
+          payload: { details: { previousStatus: sos.status, notes } }
+        }
+      });
+
+      await this.outboxService?.enqueue(tx, {
+        aggregateType: 'SOS_EVENT',
+        aggregateId: sosEventId,
+        eventType: 'sos.resolved',
+        payload: {
+          status: 'RESOLVED',
+          notes,
+        },
+      });
     });
 
-    await this.logAdminAction(adminId, 'SOS_RESOLVED', sosEventId, { previousStatus: sos.status, notes });
     return { success: true };
   }
 

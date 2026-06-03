@@ -1,5 +1,6 @@
-import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { OutboxService } from '../outbox/outbox.service';
 import { CreateSosEventDto } from './dto/create-sos-event.dto';
 import { CreateIncidentReportDto } from './dto/create-incident-report.dto';
 import { AddTrustedContactDto } from './dto/add-trusted-contact.dto';
@@ -9,7 +10,17 @@ import { randomBytes } from 'crypto';
 
 @Injectable()
 export class SafetyService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private outboxService?: OutboxService
+  ) {}
+
+  private async runTransaction<T>(callback: (tx: any) => Promise<T>): Promise<T> {
+    if (typeof this.prisma.$transaction === 'function') {
+      return this.prisma.$transaction(callback);
+    }
+    return callback(this.prisma);
+  }
 
   // SOS Operations
   async createSosEvent(userId: string, dto: CreateSosEventDto) {
@@ -88,19 +99,33 @@ export class SafetyService {
       throw new NotFoundException('SOS event not found');
     }
 
-    const updated = await this.prisma.sosEvent.update({
-      where: { id: sosEventId },
-      data: { status: 'RESOLVED', resolvedAt: new Date() },
-    });
+    const updated = await this.runTransaction(async (tx) => {
+      const up = await tx.sosEvent.update({
+        where: { id: sosEventId },
+        data: { status: 'RESOLVED', resolvedAt: new Date() },
+      });
 
-    await this.prisma.auditLog.create({
-      data: {
-        actorId: adminId,
-        action: 'SOS_RESOLVED',
-        entity: 'SOS_EVENT',
-        entityId: sosEventId,
-        payload: { resolution, previousStatus: sosEvent.status, newStatus: 'RESOLVED' },
-      },
+      await tx.auditLog.create({
+        data: {
+          actorId: adminId,
+          action: 'SOS_RESOLVED',
+          entity: 'SOS_EVENT',
+          entityId: sosEventId,
+          payload: { resolution, previousStatus: sosEvent.status, newStatus: 'RESOLVED' },
+        },
+      });
+
+      await this.outboxService?.enqueue(tx, {
+        aggregateType: 'SOS_EVENT',
+        aggregateId: sosEventId,
+        eventType: 'sos.resolved',
+        payload: {
+          status: 'RESOLVED',
+          resolution,
+        },
+      });
+
+      return up;
     });
 
     return updated;
