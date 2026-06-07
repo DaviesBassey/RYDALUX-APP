@@ -72,43 +72,60 @@ export class SupportService {
       }
     }
 
-    const ticket = await this.prisma.supportTicket.create({
-      data: {
-        createdById: userId,
-        title: dto.title,
-        description: dto.description,
-        type: dto.type,
-        priority: dto.priority || SupportTicketPriority.MEDIUM,
-        status: SupportStatus.OPEN,
-        tripId,
-        paymentId,
-        payoutId,
-        sosEventId,
-        incidentReportId,
-        vehicleId,
-      },
-      include: {
-        createdBy: {
-          select: { id: true, email: true, firstName: true, lastName: true },
-        },
-        messages: true,
-        attachments: true,
-      },
-    });
-
-    // Audit log
-    await this.prisma.auditLog.create({
-      data: {
-        actorId: userId,
-        action: 'SUPPORT_TICKET_CREATED',
-        entity: 'SUPPORT_TICKET',
-        entityId: ticket.id,
-        payload: {
+    const ticket = await this.runTransaction(async (tx) => {
+      const created = await tx.supportTicket.create({
+        data: {
+          createdById: userId,
+          title: dto.title,
+          description: dto.description,
           type: dto.type,
-          priority: dto.priority,
-          linkedEntity: tripId ? 'trip' : paymentId ? 'payment' : 'other',
+          priority: dto.priority || SupportTicketPriority.MEDIUM,
+          status: SupportStatus.OPEN,
+          tripId,
+          paymentId,
+          payoutId,
+          sosEventId,
+          incidentReportId,
+          vehicleId,
         },
-      },
+        include: {
+          createdBy: {
+            select: { id: true, email: true, firstName: true, lastName: true },
+          },
+          messages: true,
+          attachments: true,
+        },
+      });
+
+      // Audit log
+      await tx.auditLog.create({
+        data: {
+          actorId: userId,
+          action: 'SUPPORT_TICKET_CREATED',
+          entity: 'SUPPORT_TICKET',
+          entityId: created.id,
+          payload: {
+            type: dto.type,
+            priority: dto.priority,
+            linkedEntity: tripId ? 'trip' : paymentId ? 'payment' : 'other',
+          },
+        },
+      });
+
+      if (this.outboxService) {
+        await this.outboxService.create(tx, {
+          aggregateType: 'SUPPORT_TICKET',
+          aggregateId: created.id,
+          eventType: 'support.updated',
+          payload: {
+            action: 'CREATED',
+            status: created.status,
+            priority: created.priority,
+          },
+        });
+      }
+
+      return created;
     });
 
     return ticket;
@@ -276,40 +293,59 @@ export class SupportService {
       throw new ForbiddenException('Only admin users can create internal messages');
     }
 
-    const message = await this.prisma.supportTicketMessage.create({
-      data: {
-        ticketId,
-        authorId: userId,
-        content: dto.content,
-        isInternal: dto.isInternal || false,
-      },
-      include: {
-        author: {
-          select: { id: true, email: true, firstName: true, lastName: true },
-        },
-      },
-    });
-
-    // Auto-update status to IN_REVIEW if still OPEN and admin replied
-    if (isAdminUser && ticket.status === SupportStatus.OPEN) {
-      await this.prisma.supportTicket.update({
-        where: { id: ticketId },
-        data: { status: SupportStatus.IN_REVIEW },
-      });
-    }
-
-    // Audit log
-    await this.prisma.auditLog.create({
-      data: {
-        actorId: userId,
-        action: 'SUPPORT_TICKET_REPLY_ADDED',
-        entity: 'SUPPORT_TICKET_MESSAGE',
-        entityId: message.id,
-        payload: {
+    const message = await this.runTransaction(async (tx) => {
+      const msg = await tx.supportTicketMessage.create({
+        data: {
           ticketId,
-          isInternal: message.isInternal,
+          authorId: userId,
+          content: dto.content,
+          isInternal: dto.isInternal || false,
         },
-      },
+        include: {
+          author: {
+            select: { id: true, email: true, firstName: true, lastName: true },
+          },
+        },
+      });
+
+      let nextStatus = ticket.status;
+      // Auto-update status to IN_REVIEW if still OPEN and admin replied
+      if (isAdminUser && ticket.status === SupportStatus.OPEN) {
+        nextStatus = SupportStatus.IN_REVIEW;
+        await tx.supportTicket.update({
+          where: { id: ticketId },
+          data: { status: SupportStatus.IN_REVIEW },
+        });
+      }
+
+      // Audit log
+      await tx.auditLog.create({
+        data: {
+          actorId: userId,
+          action: 'SUPPORT_TICKET_REPLY_ADDED',
+          entity: 'SUPPORT_TICKET_MESSAGE',
+          entityId: msg.id,
+          payload: {
+            ticketId,
+            isInternal: msg.isInternal,
+          },
+        },
+      });
+
+      if (this.outboxService) {
+        await this.outboxService.create(tx, {
+          aggregateType: 'SUPPORT_TICKET',
+          aggregateId: ticketId,
+          eventType: 'support.updated',
+          payload: {
+            action: 'REPLY_ADDED',
+            status: nextStatus,
+            isInternal: msg.isInternal,
+          },
+        });
+      }
+
+      return msg;
     });
 
     return message;
@@ -511,28 +547,45 @@ export class SupportService {
       throw new NotFoundException('Admin user not found');
     }
 
-    const updated = await this.prisma.supportTicket.update({
-      where: { id: ticketId },
-      data: { assignedToId: dto.adminUserId },
-      include: {
-        assignedTo: {
-          select: { user: { select: { id: true, email: true, firstName: true, lastName: true } } },
+    const updated = await this.runTransaction(async (tx) => {
+      const up = await tx.supportTicket.update({
+        where: { id: ticketId },
+        data: { assignedToId: dto.adminUserId },
+        include: {
+          assignedTo: {
+            select: { user: { select: { id: true, email: true, firstName: true, lastName: true } } },
+          },
         },
-      },
-    });
+      });
 
-    // Audit log
-    await this.prisma.auditLog.create({
-      data: {
-        actorId: adminId,
-        action: 'SUPPORT_TICKET_ASSIGNED',
-        entity: 'SUPPORT_TICKET',
-        entityId: ticketId,
-        payload: {
-          assignedToUserId: dto.adminUserId,
-          notes: dto.notes,
+      // Audit log
+      await tx.auditLog.create({
+        data: {
+          actorId: adminId,
+          action: 'SUPPORT_TICKET_ASSIGNED',
+          entity: 'SUPPORT_TICKET',
+          entityId: ticketId,
+          payload: {
+            assignedToUserId: dto.adminUserId,
+            notes: dto.notes,
+          },
         },
-      },
+      });
+
+      if (this.outboxService) {
+        await this.outboxService.create(tx, {
+          aggregateType: 'SUPPORT_TICKET',
+          aggregateId: ticketId,
+          eventType: 'support.updated',
+          payload: {
+            action: 'ASSIGNED',
+            assignedToId: dto.adminUserId,
+            notes: dto.notes,
+          },
+        });
+      }
+
+      return up;
     });
 
     return updated;
@@ -619,25 +672,42 @@ export class SupportService {
       throw new ForbiddenException('You do not have permission to close this ticket');
     }
 
-    const updated = await this.prisma.supportTicket.update({
-      where: { id: ticketId },
-      data: {
-        status: SupportStatus.CLOSED,
-        closedAt: new Date(),
-      },
-    });
-
-    // Audit log
-    await this.prisma.auditLog.create({
-      data: {
-        actorId: userId,
-        action: 'SUPPORT_TICKET_CLOSED',
-        entity: 'SUPPORT_TICKET',
-        entityId: ticketId,
-        payload: {
-          previousStatus: ticket.status,
+    const updated = await this.runTransaction(async (tx) => {
+      const up = await tx.supportTicket.update({
+        where: { id: ticketId },
+        data: {
+          status: SupportStatus.CLOSED,
+          closedAt: new Date(),
         },
-      },
+      });
+
+      // Audit log
+      await tx.auditLog.create({
+        data: {
+          actorId: userId,
+          action: 'SUPPORT_TICKET_CLOSED',
+          entity: 'SUPPORT_TICKET',
+          entityId: ticketId,
+          payload: {
+            previousStatus: ticket.status,
+          },
+        },
+      });
+
+      if (this.outboxService) {
+        await this.outboxService.create(tx, {
+          aggregateType: 'SUPPORT_TICKET',
+          aggregateId: ticketId,
+          eventType: 'support.updated',
+          payload: {
+            action: 'CLOSED',
+            previousStatus: ticket.status,
+            newStatus: SupportStatus.CLOSED,
+          },
+        });
+      }
+
+      return up;
     });
 
     return updated;
@@ -662,25 +732,42 @@ export class SupportService {
       throw new ForbiddenException('Only admin users can reopen tickets');
     }
 
-    const updated = await this.prisma.supportTicket.update({
-      where: { id: ticketId },
-      data: {
-        status: SupportStatus.OPEN,
-        closedAt: null,
-      },
-    });
-
-    // Audit log
-    await this.prisma.auditLog.create({
-      data: {
-        actorId: adminId,
-        action: 'SUPPORT_TICKET_REOPENED',
-        entity: 'SUPPORT_TICKET',
-        entityId: ticketId,
-        payload: {
-          previousStatus: ticket.status,
+    const updated = await this.runTransaction(async (tx) => {
+      const up = await tx.supportTicket.update({
+        where: { id: ticketId },
+        data: {
+          status: SupportStatus.OPEN,
+          closedAt: null,
         },
-      },
+      });
+
+      // Audit log
+      await tx.auditLog.create({
+        data: {
+          actorId: adminId,
+          action: 'SUPPORT_TICKET_REOPENED',
+          entity: 'SUPPORT_TICKET',
+          entityId: ticketId,
+          payload: {
+            previousStatus: ticket.status,
+          },
+        },
+      });
+
+      if (this.outboxService) {
+        await this.outboxService.create(tx, {
+          aggregateType: 'SUPPORT_TICKET',
+          aggregateId: ticketId,
+          eventType: 'support.updated',
+          payload: {
+            action: 'REOPENED',
+            previousStatus: ticket.status,
+            newStatus: SupportStatus.OPEN,
+          },
+        });
+      }
+
+      return up;
     });
 
     return updated;
