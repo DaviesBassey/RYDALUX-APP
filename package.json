@@ -16,16 +16,16 @@
     "format": "prettier --write .",
     "db:start": "docker compose up -d",
     "db:stop": "docker compose down",
-    "db:migrate": "pnpm --filter @rydulux/prisma migrate",
-    "db:seed": "pnpm --filter @rydulux/api-services-local run seed:admin",
+    "db:migrate": "pnpm --filter @rydalux/prisma migrate",
+    "db:seed": "pnpm --filter @rydalux/api-services-local run seed:admin",
     "db:setup": "pnpm db:start && sleep 3 && pnpm db:migrate && pnpm db:seed",
-    "start:api": "pnpm --filter @rydulux/api-services-local start",
-    "start:admin": "pnpm --filter @rydulux/admin dev",
-    "start:mobile": "pnpm --filter @rydulux/mobile start",
+    "start:api": "pnpm --filter @rydalux/api-services-local start",
+    "start:admin": "pnpm --filter @rydalux/admin dev",
+    "start:mobile": "pnpm --filter @rydalux/mobile start",
     "build:staging": "turbo run build",
-    "db:migrate:staging": "pnpm --filter @rydulux/prisma migrate:deploy",
+    "db:migrate:staging": "pnpm --filter @rydalux/prisma migrate:deploy",
     "healthcheck:staging": "curl -f http://localhost:4000/health/ready",
-    "outbox:process": "pnpm --filter @rydulux/api-services-local run outbox:process"
+    "outbox:process": "pnpm --filter @rydalux/api-services-local run outbox:process"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

@@ -17,7 +17,7 @@
     "incremental": true,
     "baseUrl": ".",
     "paths": {
-      "@rydulux/shared": ["../../packages/shared/src/index.ts"]
+      "@rydalux/shared": ["../../packages/shared/src/index.ts"]
     },
     "outDir": "dist",
     "rootDir": "src",
