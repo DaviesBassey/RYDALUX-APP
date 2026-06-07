@@ -1,5 +1,6 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import Redis from 'ioredis';
 import { PrismaService } from '../prisma/prisma.service';
 
 export const OUTBOX_STATUS = {
@@ -52,7 +53,10 @@ export class OutboxService implements OnModuleInit, OnModuleDestroy {
 
   public publishedEvents: OutboxEventRecord[] = [];
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject('REDIS_CLIENT') private readonly redisClient: Redis
+  ) {}
 
   onModuleInit() {
     if (process.env.NODE_ENV === 'test' || process.env.OUTBOX_SCHEDULER_DISABLED === 'true') {
@@ -171,7 +175,11 @@ export class OutboxService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.publishedEvents.push(event);
-    this.logger.log(`Mock published outbox event ${event.eventType} for ${event.aggregateType}:${event.aggregateId}`);
+    this.logger.log(`Publishing outbox event ${event.eventType} for ${event.aggregateType}:${event.aggregateId}`);
+    
+    if (this.redisClient && typeof this.redisClient.publish === 'function') {
+      await this.redisClient.publish('rydalux-domain-events', JSON.stringify(event));
+    }
   }
 
   async processPendingEvents(limit = 100): Promise<ProcessResult> {

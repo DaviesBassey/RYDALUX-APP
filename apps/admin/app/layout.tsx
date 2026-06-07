@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <head>
+      <body>
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -48,8 +48,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             `
           }}
         />
-      </head>
-      <body>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

@@ -2,6 +2,7 @@ import { OUTBOX_STATUS, OutboxEventRecord, OutboxService } from '../src/outbox/o
 
 describe('OutboxService', () => {
   let prisma: any;
+  let redisClient: any;
   let service: OutboxService;
 
   const pendingEvent = (overrides: Partial<OutboxEventRecord> = {}): OutboxEventRecord => ({
@@ -30,7 +31,11 @@ describe('OutboxService', () => {
       },
     };
 
-    service = new OutboxService(prisma);
+    redisClient = {
+      publish: jest.fn().mockResolvedValue(1),
+    };
+
+    service = new OutboxService(prisma, redisClient);
     service.publishedEvents = [];
   });
 
@@ -133,5 +138,14 @@ describe('OutboxService', () => {
     expect(result.skipped).toBe(1);
     expect(service.publishedEvents).toHaveLength(0);
     expect(prisma.outboxEvent.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('publishEvent publishes the event to Redis channel', async () => {
+    const event = pendingEvent();
+    await service.publishEvent(event);
+    expect(redisClient.publish).toHaveBeenCalledWith(
+      'rydalux-domain-events',
+      JSON.stringify(event)
+    );
   });
 });
